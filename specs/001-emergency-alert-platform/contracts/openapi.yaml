@@ -1,0 +1,897 @@
+openapi: 3.0.3
+info:
+  title: Localized Emergency Alert & Reporting Platform API
+  version: 0.1.0
+  description: >
+    REST contract for the subscriber portal and administrator dashboard. All endpoints except
+    health, admin login, and resident Google sign-in require a bearer JWT. Role and jurisdiction
+    scoping are enforced server-side.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://api.example.com
+    description: Deployment (Render/Railway)
+
+tags:
+  - name: Auth
+  - name: Locations
+  - name: Residents
+  - name: Reports
+  - name: Admin Alerts
+  - name: Admin Reports
+  - name: Admin Accounts
+  - name: Audit
+  - name: Health
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+
+  /api/auth/admin/login:
+    post:
+      tags: [Auth]
+      summary: Administrator email/password login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthToken' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/auth/resident/google:
+    post:
+      tags: [Auth]
+      summary: Exchange a Google ID token for a resident session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GoogleLoginRequest' }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthToken' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Current authenticated principal
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/barangays:
+    get:
+      tags: [Locations]
+      summary: List barangays in the locality
+      responses:
+        '200':
+          description: Barangays
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Barangay' }
+
+  /api/residents/me:
+    get:
+      tags: [Residents]
+      summary: Get the current resident profile
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResidentProfile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      tags: [Residents]
+      summary: Update the current resident profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResidentProfileUpdate' }
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResidentProfile' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/residents/me/phones:
+    get:
+      tags: [Residents]
+      summary: List linked phone numbers
+      responses:
+        '200':
+          description: Phone numbers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PhoneNumber' }
+    post:
+      tags: [Residents]
+      summary: Link a phone number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PhoneNumberCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PhoneNumber' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/residents/me/phones/{phoneId}:
+    delete:
+      tags: [Residents]
+      summary: Unlink a phone number
+      parameters:
+        - $ref: '#/components/parameters/PhoneId'
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/residents/me/consent:
+    get:
+      tags: [Residents]
+      summary: Get the current consent record
+      responses:
+        '200':
+          description: Consent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Consent' }
+    put:
+      tags: [Residents]
+      summary: Grant or revoke consent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConsentUpdate' }
+      responses:
+        '200':
+          description: Updated consent
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Consent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/residents/me/preferences:
+    get:
+      tags: [Residents]
+      summary: Get per-category alert preferences
+      responses:
+        '200':
+          description: Preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AlertPreference' }
+    put:
+      tags: [Residents]
+      summary: Replace per-category alert preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: '#/components/schemas/AlertPreference' }
+      responses:
+        '200':
+          description: Updated preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AlertPreference' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/residents/me/announcements:
+    get:
+      tags: [Residents]
+      summary: List announcements relevant to the resident
+      responses:
+        '200':
+          description: Announcements
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Alert' }
+
+  /api/residents/me/reports:
+    get:
+      tags: [Reports]
+      summary: List the resident's own reports
+      responses:
+        '200':
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EmergencyReport' }
+
+  /api/reports:
+    post:
+      tags: [Reports]
+      summary: Submit a local emergency report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportCreate' }
+      responses:
+        '201':
+          description: Report stored with NEW status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmergencyReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/admin/alerts:
+    get:
+      tags: [Admin Alerts]
+      summary: List alerts
+      responses:
+        '200':
+          description: Alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Alert' }
+    post:
+      tags: [Admin Alerts]
+      summary: Create a draft alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertCreate' }
+      responses:
+        '201':
+          description: Draft created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/admin/alerts/{alertId}:
+    parameters:
+      - $ref: '#/components/parameters/AlertId'
+    get:
+      tags: [Admin Alerts]
+      summary: Get an alert
+      responses:
+        '200':
+          description: Alert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Admin Alerts]
+      summary: Update a draft alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertUpdate' }
+      responses:
+        '200':
+          description: Updated alert
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/admin/alerts/{alertId}/recipients:
+    parameters:
+      - $ref: '#/components/parameters/AlertId'
+    get:
+      tags: [Admin Alerts]
+      summary: Preview intended recipients for an alert's targets
+      responses:
+        '200':
+          description: Recipient preview
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecipientPreview' }
+
+  /api/admin/alerts/{alertId}/confirm:
+    parameters:
+      - $ref: '#/components/parameters/AlertId'
+    post:
+      tags: [Admin Alerts]
+      summary: Confirm and broadcast an alert
+      description: >
+        Requires explicit confirmation. Recomputes eligible recipients, stores delivery records,
+        and submits to the messaging provider. Fails if there are no eligible recipients.
+      responses:
+        '202':
+          description: Broadcast accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/admin/alerts/{alertId}/deliveries:
+    parameters:
+      - $ref: '#/components/parameters/AlertId'
+    get:
+      tags: [Admin Alerts]
+      summary: List per-recipient delivery outcomes
+      responses:
+        '200':
+          description: Delivery records
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DeliveryRecord' }
+
+  /api/admin/reports:
+    get:
+      tags: [Admin Reports]
+      summary: List reports in the administrator's jurisdiction
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ReportStatus' }
+        - name: barangayId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EmergencyReport' }
+
+  /api/admin/reports/{reportId}:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [Admin Reports]
+      summary: Get a report
+      responses:
+        '200':
+          description: Report
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmergencyReport' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/admin/reports/{reportId}/status:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    patch:
+      tags: [Admin Reports]
+      summary: Update report status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportStatusUpdate' }
+      responses:
+        '200':
+          description: Updated report
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmergencyReport' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/admin/reports/{reportId}/escalate:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    post:
+      tags: [Admin Reports]
+      summary: Escalate a report into a draft alert (HIGH_LEVEL only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportEscalation' }
+      responses:
+        '201':
+          description: Draft alert created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/admin/administrators:
+    get:
+      tags: [Admin Accounts]
+      summary: List administrator accounts (SUPERADMIN)
+      responses:
+        '200':
+          description: Administrators
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Administrator' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Admin Accounts]
+      summary: Create an administrator account (SUPERADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdministratorCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Administrator' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/admin/administrators/{adminId}:
+    parameters:
+      - $ref: '#/components/parameters/AdminId'
+    patch:
+      tags: [Admin Accounts]
+      summary: Update an administrator account (SUPERADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdministratorUpdate' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Administrator' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/admin/audit:
+    get:
+      tags: [Audit]
+      summary: List audit entries (SUPERADMIN and HIGH_LEVEL)
+      parameters:
+        - name: entityType
+          in: query
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditEntry' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    AlertId:
+      name: alertId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReportId:
+      name: reportId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AdminId:
+      name: adminId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PhoneId:
+      name: phoneId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    BadRequest:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Not permitted for the current role/jurisdiction
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Invalid state transition or duplicate resource
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        code: { type: string }
+        details:
+          type: array
+          items: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+
+    GoogleLoginRequest:
+      type: object
+      required: [idToken]
+      properties:
+        idToken: { type: string }
+
+    AuthToken:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, example: Bearer }
+        expiresIn: { type: integer, example: 3600 }
+        user: { $ref: '#/components/schemas/UserSummary' }
+
+    UserSummary:
+      type: object
+      required: [id, kind, role]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [ADMIN, RESIDENT] }
+        role: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        barangayId: { type: string, format: uuid, nullable: true }
+
+    Barangay:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    ResidentProfile:
+      type: object
+      required: [id, email, role, barangayId]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        role:
+          type: string
+          enum: [RESIDENT, STUDENT, TEACHER, EMPLOYEE, OTHER]
+        barangayId: { type: string, format: uuid }
+        buildingTag: { type: string }
+        isActive: { type: boolean }
+
+    ResidentProfileUpdate:
+      type: object
+      properties:
+        displayName: { type: string }
+        role:
+          type: string
+          enum: [RESIDENT, STUDENT, TEACHER, EMPLOYEE, OTHER]
+        barangayId: { type: string, format: uuid }
+        buildingTag: { type: string, nullable: true }
+
+    PhoneNumber:
+      type: object
+      required: [id, number, isPrimary]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, example: '+639171234567' }
+        isPrimary: { type: boolean }
+        isVerified: { type: boolean }
+
+    PhoneNumberCreate:
+      type: object
+      required: [number]
+      properties:
+        number: { type: string, example: '+639171234567' }
+        isPrimary: { type: boolean }
+
+    Consent:
+      type: object
+      required: [granted, policyVersion, recordedAt]
+      properties:
+        granted: { type: boolean }
+        policyVersion: { type: string }
+        recordedAt: { type: string, format: date-time }
+
+    ConsentUpdate:
+      type: object
+      required: [granted, policyVersion]
+      properties:
+        granted: { type: boolean }
+        policyVersion: { type: string }
+
+    AlertPreference:
+      type: object
+      required: [category, optedIn]
+      properties:
+        category:
+          type: string
+          enum: [FIRE, FLOOD, MEDICAL, SECURITY_THREAT, POWER_OUTAGE, INFRASTRUCTURE_DAMAGE, OTHER]
+        optedIn: { type: boolean }
+
+    AlertTarget:
+      type: object
+      properties:
+        barangayId: { type: string, format: uuid, nullable: true }
+        residentRole:
+          type: string
+          enum: [RESIDENT, STUDENT, TEACHER, EMPLOYEE, OTHER]
+          nullable: true
+
+    Alert:
+      type: object
+      required: [id, content, category, status, targets]
+      properties:
+        id: { type: string, format: uuid }
+        content: { type: string }
+        category:
+          type: string
+          enum: [FIRE, FLOOD, MEDICAL, SECURITY_THREAT, POWER_OUTAGE, INFRASTRUCTURE_DAMAGE, OTHER]
+        status:
+          type: string
+          enum: [DRAFT, CONFIRMED, SENDING, COMPLETED]
+        createdByAdminId: { type: string, format: uuid }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+        targets:
+          type: array
+          items: { $ref: '#/components/schemas/AlertTarget' }
+        createdAt: { type: string, format: date-time }
+
+    AlertCreate:
+      type: object
+      required: [content, category, targets]
+      properties:
+        content: { type: string, minLength: 1 }
+        category:
+          type: string
+          enum: [FIRE, FLOOD, MEDICAL, SECURITY_THREAT, POWER_OUTAGE, INFRASTRUCTURE_DAMAGE, OTHER]
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/AlertTarget' }
+
+    AlertUpdate:
+      type: object
+      properties:
+        content: { type: string, minLength: 1 }
+        category:
+          type: string
+          enum: [FIRE, FLOOD, MEDICAL, SECURITY_THREAT, POWER_OUTAGE, INFRASTRUCTURE_DAMAGE, OTHER]
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/AlertTarget' }
+
+    RecipientPreview:
+      type: object
+      required: [count, recipients]
+      properties:
+        count: { type: integer }
+        recipients:
+          type: array
+          items:
+            type: object
+            properties:
+              residentId: { type: string, format: uuid }
+              displayName: { type: string }
+              barangayId: { type: string, format: uuid }
+              role: { type: string }
+              phoneNumbers:
+                type: array
+                items: { type: string }
+
+    DeliveryRecord:
+      type: object
+      required: [id, residentId, phoneNumber, status]
+      properties:
+        id: { type: string, format: uuid }
+        residentId: { type: string, format: uuid }
+        phoneNumber: { type: string }
+        status:
+          type: string
+          enum: [SUBMITTED, SUCCESS, FAILURE, DELAYED]
+        attempts: { type: integer }
+        lastError: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
+
+    ReportStatus:
+      type: string
+      enum: [NEW, ACKNOWLEDGED, RESOLVED, DISMISSED]
+
+    EmergencyReport:
+      type: object
+      required: [id, category, severity, description, status, barangayId]
+      properties:
+        id: { type: string, format: uuid }
+        residentId: { type: string, format: uuid }
+        barangayId: { type: string, format: uuid }
+        category:
+          type: string
+          enum: [FIRE, FLOOD, MEDICAL, SECURITY_THREAT, POWER_OUTAGE, INFRASTRUCTURE_DAMAGE, OTHER]
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        description: { type: string, maxLength: 500 }
+        latitude: { type: number, format: double, nullable: true }
+        longitude: { type: number, format: double, nullable: true }
+        addressText: { type: string, nullable: true }
+        status: { $ref: '#/components/schemas/ReportStatus' }
+        reviewedByAdminId: { type: string, format: uuid, nullable: true }
+        escalatedAlertId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ReportCreate:
+      type: object
+      required: [category, severity, description]
+      properties:
+        category:
+          type: string
+          enum: [FIRE, FLOOD, MEDICAL, SECURITY_THREAT, POWER_OUTAGE, INFRASTRUCTURE_DAMAGE, OTHER]
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        description: { type: string, maxLength: 500 }
+        latitude: { type: number, format: double, nullable: true }
+        longitude: { type: number, format: double, nullable: true }
+        addressText: { type: string, nullable: true }
+
+    ReportStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: '#/components/schemas/ReportStatus' }
+
+    ReportEscalation:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1 }
+        targets:
+          type: array
+          items: { $ref: '#/components/schemas/AlertTarget' }
+
+    Administrator:
+      type: object
+      required: [id, email, role, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        role:
+          type: string
+          enum: [SUPERADMIN, HIGH_LEVEL, LOW_LEVEL]
+        barangayId: { type: string, format: uuid, nullable: true }
+        isActive: { type: boolean }
+
+    AdministratorCreate:
+      type: object
+      required: [email, password, role]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8 }
+        displayName: { type: string }
+        role:
+          type: string
+          enum: [SUPERADMIN, HIGH_LEVEL, LOW_LEVEL]
+        barangayId: { type: string, format: uuid, nullable: true }
+
+    AdministratorUpdate:
+      type: object
+      properties:
+        displayName: { type: string }
+        role:
+          type: string
+          enum: [SUPERADMIN, HIGH_LEVEL, LOW_LEVEL]
+        barangayId: { type: string, format: uuid, nullable: true }
+        isActive: { type: boolean }
+        password: { type: string, minLength: 8 }
+
+    AuditEntry:
+      type: object
+      required: [id, actorType, action, entityType, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        actorType:
+          type: string
+          enum: [ADMIN, RESIDENT, SYSTEM]
+        actorId: { type: string, format: uuid, nullable: true }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string, format: uuid, nullable: true }
+        metadata: { type: object, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+security:
+  - bearerAuth: []
