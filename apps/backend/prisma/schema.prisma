@@ -1,0 +1,243 @@
+// Prisma schema for the Localized Emergency Alert & Reporting Platform.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  SUPERADMIN
+  HIGH_LEVEL
+  LOW_LEVEL
+}
+
+enum ResidentRole {
+  RESIDENT
+  STUDENT
+  TEACHER
+  EMPLOYEE
+  OTHER
+}
+
+enum AlertCategory {
+  FIRE
+  FLOOD
+  MEDICAL
+  SECURITY_THREAT
+  POWER_OUTAGE
+  INFRASTRUCTURE_DAMAGE
+  OTHER
+}
+
+enum ReportSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReportStatus {
+  NEW
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+enum AlertStatus {
+  DRAFT
+  CONFIRMED
+  SENDING
+  COMPLETED
+}
+
+enum DeliveryStatus {
+  SUBMITTED
+  SUCCESS
+  FAILURE
+  DELAYED
+}
+
+enum ActorType {
+  ADMIN
+  RESIDENT
+  SYSTEM
+}
+
+model Locality {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  barangays Barangay[]
+}
+
+model Barangay {
+  id             String          @id @default(uuid())
+  localityId     String
+  name           String
+  locality       Locality        @relation(fields: [localityId], references: [id], onDelete: Cascade)
+  residents      Resident[]
+  administrators Administrator[]
+  alertTargets   AlertTarget[]
+  reports        EmergencyReport[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([localityId, name])
+}
+
+model Resident {
+  id            String            @id @default(uuid())
+  googleSubject String            @unique
+  email         String            @unique
+  displayName   String?
+  role          ResidentRole      @default(RESIDENT)
+  barangayId    String
+  buildingTag   String?
+  isActive      Boolean           @default(true)
+  barangay      Barangay          @relation(fields: [barangayId], references: [id])
+  phones        PhoneNumber[]
+  consent       Consent?
+  preferences   AlertPreference[]
+  reports       EmergencyReport[]
+  deliveries    DeliveryRecord[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model PhoneNumber {
+  id         String   @id @default(uuid())
+  residentId String
+  number     String
+  isPrimary  Boolean  @default(false)
+  isVerified Boolean  @default(false)
+  resident   Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([residentId, number])
+}
+
+model Consent {
+  id            String   @id @default(uuid())
+  residentId    String   @unique
+  granted       Boolean
+  policyVersion String
+  recordedAt    DateTime @default(now())
+  resident      Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+}
+
+model AlertPreference {
+  id         String        @id @default(uuid())
+  residentId String
+  category   AlertCategory
+  optedIn    Boolean       @default(true)
+  resident   Resident      @relation(fields: [residentId], references: [id], onDelete: Cascade)
+
+  @@unique([residentId, category])
+}
+
+model Administrator {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  role           AdminRole
+  barangayId     String?
+  displayName    String?
+  isActive       Boolean  @default(true)
+  barangay       Barangay? @relation(fields: [barangayId], references: [id])
+  createdAlerts  Alert[]
+  reviewedReports EmergencyReport[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Alert {
+  id               String           @id @default(uuid())
+  content          String
+  category         AlertCategory
+  createdByAdminId String
+  status           AlertStatus      @default(DRAFT)
+  confirmedAt      DateTime?
+  createdBy        Administrator    @relation(fields: [createdByAdminId], references: [id])
+  targets          AlertTarget[]
+  deliveries       DeliveryRecord[]
+  escalationReports EmergencyReport[]
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model AlertTarget {
+  id           String        @id @default(uuid())
+  alertId      String
+  barangayId   String?
+  residentRole ResidentRole?
+  alert        Alert         @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  barangay     Barangay?     @relation(fields: [barangayId], references: [id])
+}
+
+model DeliveryRecord {
+  id                String         @id @default(uuid())
+  alertId           String
+  residentId        String
+  phoneNumber       String
+  status            DeliveryStatus @default(SUBMITTED)
+  attempts          Int            @default(1)
+  idempotencyKey    String         @unique
+  providerMessageId String?
+  lastError         String?
+  alert             Alert          @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  resident          Resident       @relation(fields: [residentId], references: [id])
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@unique([alertId, residentId, phoneNumber])
+}
+
+model EmergencyReport {
+  id               String               @id @default(uuid())
+  residentId       String
+  barangayId       String
+  category         AlertCategory
+  severity         ReportSeverity
+  description      String
+  latitude         Float?
+  longitude        Float?
+  addressText      String?
+  status           ReportStatus         @default(NEW)
+  reviewedByAdminId String?
+  escalatedAlertId String?
+  resident         Resident             @relation(fields: [residentId], references: [id])
+  barangay         Barangay             @relation(fields: [barangayId], references: [id])
+  reviewedBy       Administrator?       @relation(fields: [reviewedByAdminId], references: [id])
+  escalatedAlert   Alert?               @relation(fields: [escalatedAlertId], references: [id])
+  history          ReportStatusHistory[]
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+}
+
+model ReportStatusHistory {
+  id              String        @id @default(uuid())
+  reportId        String
+  fromStatus      ReportStatus?
+  toStatus        ReportStatus
+  changedByAdminId String?
+  changedAt       DateTime      @default(now())
+  report          EmergencyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+model AuditEntry {
+  id         String    @id @default(uuid())
+  actorType  ActorType
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+}
