@@ -8,6 +8,7 @@ import { alertRouter } from './modules/alerts/alert.routes';
 import { auditRouter } from './modules/audit/audit.routes';
 import { authRouter } from './modules/auth/auth.routes';
 import { locationRouter } from './modules/locations/locations.routes';
+import { notificationRouter } from './modules/notifications/notification.routes';
 import { reportRouter } from './modules/reports/report.routes';
 import { residentRouter } from './modules/residents/resident.routes';
 
@@ -57,6 +58,7 @@ export function createApp() {
   app.use('/api', residentRouter);
   app.use('/api', reportRouter);
   app.use('/api', alertRouter);
+  app.use('/api', notificationRouter);
   app.use('/api', adminRouter);
   app.use('/api', auditRouter);
 

@@ -2,6 +2,7 @@ import { AlertCategory } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { asyncHandler } from '../../middleware/error';
 import { parseEnum, requireString } from '../../middleware/validation';
+import { listAlertHistory, parseAlertHistoryQuery } from './alert.history';
 import {
   confirmAlert,
   createDraft,
@@ -27,6 +28,14 @@ export const createAlertHandler = asyncHandler(async (req, res) => {
 
 export const getAlertHandler = asyncHandler(async (req, res) => {
   res.json(await getAlert(prisma, req.user!, req.params.alertId));
+});
+
+export const listAlertHistoryHandler = asyncHandler(async (req, res) => {
+  const filters = parseAlertHistoryQuery(
+    req.query as Record<string, unknown>,
+    req.user!
+  );
+  res.json(await listAlertHistory(prisma, req.user!, filters));
 });
 
 export const updateAlertHandler = asyncHandler(async (req, res) => {

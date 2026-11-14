@@ -1,6 +1,7 @@
 import { AlertCategory, ResidentRole } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { AppError, asyncHandler } from '../../middleware/error';
+import { parsePage, parsePageSize } from '../../middleware/query';
 import { assert, optionalString, parseEnum, requireString } from '../../middleware/validation';
 import {
   addPhone,
@@ -10,6 +11,7 @@ import {
   listAnnouncements,
   listOwnReports,
   listPhones,
+  listResidentAlertHistory,
   removePhone,
   setConsent,
   setPreferences,
@@ -105,4 +107,15 @@ export const listAnnouncementsHandler = asyncHandler(async (req, res) => {
 
 export const listOwnReportsHandler = asyncHandler(async (req, res) => {
   res.json(await listOwnReports(prisma, req.user!.id));
+});
+
+export const listAlertHistoryHandler = asyncHandler(async (req, res) => {
+  res.json(
+    await listResidentAlertHistory(
+      prisma,
+      req.user!.id,
+      parsePage(req.query.page),
+      parsePageSize(req.query.pageSize)
+    )
+  );
 });

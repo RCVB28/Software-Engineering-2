@@ -27,6 +27,8 @@ The API listens on `http://localhost:4000` and exposes `GET /health` and `GET /a
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | Twilio credentials |
 | `CORS_ORIGIN` | Comma-separated allowlist (default `http://localhost:5173`) |
 | `MESSAGING_MAX_RETRIES` / `MESSAGING_RETRY_DELAY_MS` | Dispatch retry policy |
+| `AUDIT_RETENTION_INTERVAL_MS` | Scheduled audit cleanup interval (default `86400000`; minimum `60000`) |
+| `AUDIT_RETENTION_STARTUP_DELAY_MS` | Delay before the first startup cleanup (default `5000`) |
 
 ## Scripts
 
@@ -52,6 +54,24 @@ $env:RUN_DB_TESTS = '1'; npm test
 The mock provider never sends real SMS. Delivery records use the deterministic idempotency key
 `alertId:residentId:phone` so retries cannot duplicate messages.
 
+## Failure notifications
+
+When a broadcast reaches `COMPLETED`, the dispatch flow counts terminal `FAILURE` deliveries and
+creates one persisted notification per authorized administrator. `SUPERADMIN` and `HIGH_LEVEL`
+admins see every failed broadcast; `LOW_LEVEL` admins see only broadcasts they created or that
+targeted their barangay. Notifications use a unique `(adminId, alertId)` pair, so repeated
+processing refreshes the failure count instead of creating duplicates. Administrators can list,
+page, filter to unread, and acknowledge notifications through `/api/admin/notifications`.
+
+## Audit retention scheduler
+
+The API starts a retention scheduler after it begins listening. The first run happens after
+`AUDIT_RETENTION_STARTUP_DELAY_MS`; subsequent runs occur every `AUDIT_RETENTION_INTERVAL_MS`. Each
+run creates an `AuditRetentionRun` row in `RUNNING`, deletes entries whose `createdAt` is strictly
+older than 365 days, and records `SUCCESS` with the removed count or `FAILED` with an error summary.
+Failures are logged, never rethrown, and an in-process overlap guard prevents concurrent runs.
+Scheduler timers are `unref`'d and cleared during shutdown.
+
 ## Domain rules
 
 - Three administrator tiers: `SUPERADMIN`, `HIGH_LEVEL` (city-wide), `LOW_LEVEL` (own barangay).
@@ -60,4 +80,4 @@ The mock provider never sends real SMS. Delivery records use the deterministic i
 - Report lifecycle: `NEW → ACKNOWLEDGED → RESOLVED | DISMISSED` and `NEW → DISMISSED`.
 - Escalation by a `HIGH_LEVEL` admin creates a `DRAFT` alert that still requires confirmation.
 - Audit entries are written for logins, broadcasts, report transitions, escalations, and account
-  changes; a retention job removes entries older than 365 days.
+  changes; automatic retention removes entries older than 365 days and records every run.

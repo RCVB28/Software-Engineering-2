@@ -114,6 +114,76 @@ export interface Alert {
   confirmedAt: string | null;
   targets: AlertTarget[];
   createdAt: string;
+  updatedAt: string;
+}
+
+export type ResidentDeliveryOutcome = 'SUCCESS' | 'FAILURE' | 'PARTIAL' | 'PENDING';
+
+export interface PageMetadata {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  pageAdjusted: boolean;
+}
+
+export interface AlertHistoryFilters {
+  page?: number;
+  pageSize?: number;
+  status?: AlertStatus;
+  category?: AlertCategory;
+  barangayId?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+}
+
+export interface AlertHistoryItem {
+  id: string;
+  content: string;
+  category: AlertCategory;
+  status: AlertStatus;
+  targets: AlertTarget[];
+  createdAt: string;
+  confirmedAt: string | null;
+  failureCount: number;
+}
+
+export interface AlertHistoryPage extends PageMetadata {
+  items: AlertHistoryItem[];
+  availableBarangays: Barangay[];
+}
+
+export interface FailureNotification {
+  id: string;
+  alertId: string;
+  alertCategory: AlertCategory;
+  alertContent: string;
+  failureCount: number;
+  completedAt: string;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface FailureNotificationPage {
+  items: FailureNotification[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  unreadCount: number;
+}
+
+export interface ResidentAlertHistoryItem {
+  alertId: string;
+  category: AlertCategory;
+  content: string;
+  sentAt: string;
+  outcome: ResidentDeliveryOutcome;
+}
+
+export interface ResidentAlertHistoryPage extends PageMetadata {
+  items: ResidentAlertHistoryItem[];
 }
 
 export interface DeliveryRecord {

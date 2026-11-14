@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDate } from '../../components/format';
 import { ApiError, api } from '../../services/api';
@@ -22,11 +23,16 @@ export function Announcements() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-bold text-white">Announcements</h1>
-        <p className="text-sm text-slate-400">
-          Alerts that target your barangay or resident role appear here.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold text-white">Announcements</h1>
+          <p className="text-sm text-slate-400">
+            Alerts that target your barangay or resident role appear here.
+          </p>
+        </div>
+        <Link className="text-sm underline text-slate-400" to="/resident/history">
+          View my alert history
+        </Link>
       </div>
 
       {error && (

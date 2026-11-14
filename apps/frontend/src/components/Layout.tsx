@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { NotificationBell } from './NotificationBell';
 
 const baseLink = 'rounded-md px-3 py-2 text-sm font-medium transition';
 const inactive = 'text-slate-400 hover:bg-slate-800 hover:text-slate-100';
@@ -13,12 +14,14 @@ export function Layout({ variant }: { variant: 'admin' | 'resident' }) {
     variant === 'admin'
       ? [
           { to: '/admin', label: 'Compose Alert', end: true },
+          { to: '/admin/history', label: 'Alert History' },
           { to: '/admin/reports', label: 'Report Triage' },
           ...(user?.role === 'SUPERADMIN' ? [{ to: '/admin/accounts', label: 'Accounts' }] : []),
           { to: '/admin/audit', label: 'Audit Log' }
         ]
       : [
           { to: '/resident', label: 'Announcements', end: true },
+          { to: '/resident/history', label: 'Alert History' },
           { to: '/resident/report', label: 'Submit Report' },
           { to: '/resident/profile', label: 'Profile' },
           { to: '/resident/preferences', label: 'Consent & Alerts' }
@@ -45,6 +48,7 @@ export function Layout({ variant }: { variant: 'admin' | 'resident' }) {
             </div>
           </div>
           <div className="flex items-center gap-3 text-sm">
+            {variant === 'admin' && <NotificationBell />}
             <div className="text-right">
               <p className="font-semibold text-slate-100">{user?.displayName ?? user?.email}</p>
               <p className="text-xs text-slate-400">{user?.role}</p>

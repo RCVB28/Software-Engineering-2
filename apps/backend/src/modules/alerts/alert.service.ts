@@ -142,27 +142,30 @@ export async function updateDraft(
   if (input.targets) assertTargetScope(principal, input.targets);
 
   const alert = await prisma.$transaction(async (tx) => {
-    if (input.targets) {
-      await tx.alertTarget.deleteMany({ where: { alertId } });
-    }
-    return tx.alert.update({
-      where: { id: alertId },
+    const claimed = await tx.alert.updateMany({
+      where: { id: alertId, status: AlertStatus.DRAFT },
       data: {
         ...(input.content !== undefined ? { content: input.content } : {}),
         ...(input.category !== undefined ? { category: input.category } : {}),
-        ...(input.targets
-          ? {
-              targets: {
-                create: input.targets.map((target) => ({
-                  barangayId: target.barangayId ?? null,
-                  residentRole: target.residentRole ?? null
-                }))
-              }
-            }
-          : {})
-      },
-      include: { targets: true }
+        updatedAt: new Date()
+      }
     });
+    if (claimed.count === 0) {
+      throw new AppError(409, 'Only draft alerts can be modified', 'INVALID_STATE');
+    }
+
+    if (input.targets) {
+      await tx.alertTarget.deleteMany({ where: { alertId } });
+      await tx.alertTarget.createMany({
+        data: input.targets.map((target) => ({
+          alertId,
+          barangayId: target.barangayId ?? null,
+          residentRole: target.residentRole ?? null
+        }))
+      });
+    }
+
+    return tx.alert.findUniqueOrThrow({ where: { id: alertId }, include: { targets: true } });
   });
   await recordAudit(prisma, {
     actorType: 'ADMIN',
@@ -189,36 +192,46 @@ export async function confirmAlert(
   principal: Principal,
   alertId: string
 ): Promise<AlertWithTargets> {
-  const alert = await findScopedAlert(prisma, principal, alertId);
-  if (alert.status !== AlertStatus.DRAFT) {
+  const existing = await findScopedAlert(prisma, principal, alertId);
+  if (existing.status !== AlertStatus.DRAFT) {
     throw new AppError(409, 'Alert has already been confirmed', 'INVALID_STATE');
   }
 
-  const recipients = await resolveRecipients(prisma, alert.targets, alert.category);
-  if (recipients.length === 0) {
-    throw new AppError(400, 'No eligible recipients match the alert targets', 'NO_RECIPIENTS');
-  }
+  const claimed = await prisma.$transaction(async (tx) => {
+    const claim = await tx.alert.updateMany({
+      where: { id: alertId, status: AlertStatus.DRAFT },
+      data: { status: AlertStatus.CONFIRMED, confirmedAt: new Date() }
+    });
+    if (claim.count === 0) {
+      throw new AppError(409, 'Alert has already been confirmed', 'INVALID_STATE');
+    }
+
+    const alert = await tx.alert.findUniqueOrThrow({
+      where: { id: alertId },
+      include: { targets: true }
+    });
+    const recipients = await resolveRecipients(tx, alert.targets, alert.category);
+    if (recipients.length === 0) {
+      throw new AppError(400, 'No eligible recipients match the alert targets', 'NO_RECIPIENTS');
+    }
+    return { alert, recipients };
+  });
 
   await recordAudit(prisma, {
     actorType: 'ADMIN',
     actorId: principal.id,
     action: 'ALERT_CONFIRMED',
     entityType: 'Alert',
-    entityId: alert.id,
-    metadata: { recipientCount: recipients.length }
-  });
-
-  await prisma.alert.update({
-    where: { id: alertId },
-    data: { status: AlertStatus.CONFIRMED, confirmedAt: new Date() }
+    entityId: claimed.alert.id,
+    metadata: { recipientCount: claimed.recipients.length }
   });
 
   await dispatchAlert(
     prisma,
     getProvider(),
     alertId,
-    alert.content,
-    recipients.map((recipient) => ({
+    claimed.alert.content,
+    claimed.recipients.map((recipient) => ({
       residentId: recipient.residentId,
       phoneNumbers: recipient.phoneNumbers
     }))

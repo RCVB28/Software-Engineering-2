@@ -72,3 +72,34 @@ Content-Type: application/json
 {
   "status": "ACKNOWLEDGED"
 }
+
+### Edit a saved draft
+PATCH {{baseUrl}}/api/admin/alerts/<alert-id>
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "content": "Updated evacuation instructions.",
+  "category": "FLOOD",
+  "targets": [{ "barangayId": "<barangay-id>", "residentRole": null }]
+}
+
+### Administrative alert history with filters
+GET {{baseUrl}}/api/admin/alerts/history?status=COMPLETED&category=FLOOD&barangayId=<barangay-id>&from=2026-01-01T00:00:00.000Z&to=2026-12-31T23:59:59.999Z&q=evacuate&page=1&pageSize=20
+Authorization: Bearer {{adminToken}}
+
+### Failure notifications
+GET {{baseUrl}}/api/admin/notifications?page=1&pageSize=20
+Authorization: Bearer {{adminToken}}
+
+### Unread failure notifications
+GET {{baseUrl}}/api/admin/notifications?unreadOnly=true
+Authorization: Bearer {{adminToken}}
+
+### Acknowledge a failure notification
+POST {{baseUrl}}/api/admin/notifications/<notification-id>/acknowledge
+Authorization: Bearer {{adminToken}}
+
+### Resident personal alert history
+GET {{baseUrl}}/api/residents/me/alert-history?page=1&pageSize=10
+Authorization: Bearer {{residentToken}}

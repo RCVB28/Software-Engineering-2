@@ -1,24 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { AlertForm } from '../../components/AlertForm';
 import { StatusBadge } from '../../components/StatusBadge';
 import { formatDate } from '../../components/format';
 import { ApiError, api } from '../../services/api';
 import {
   humanize,
   type Alert,
-  type AlertTarget,
+  type AlertInput,
   type Barangay,
   type RecipientPreview
 } from '../../types';
-
-function describeTarget(target: AlertTarget, barangays: Barangay[]): string {
-  const parts: string[] = [];
-  if (target.barangayId) {
-    parts.push(barangays.find((barangay) => barangay.id === target.barangayId)?.name ?? target.barangayId);
-  }
-  if (target.residentRole) parts.push(humanize(target.residentRole));
-  return parts.join(' · ') || 'Everyone';
-}
 
 export function AlertDetail() {
   const { alertId = '' } = useParams();
@@ -43,6 +35,19 @@ export function AlertDetail() {
       .then(setBarangays)
       .catch(() => setBarangays([]));
   }, [loadAlert]);
+
+  const handleSave = async (input: AlertInput) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setAlert(await api.alerts.update(alertId, input));
+      setPreview(null);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Could not save the draft.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handlePreview = async () => {
     setBusy(true);
@@ -71,6 +76,10 @@ export function AlertDetail() {
       setBusy(false);
     }
   };
+
+  const initialValue: AlertInput | undefined = alert
+    ? { content: alert.content, category: alert.category, targets: alert.targets }
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -103,20 +112,15 @@ export function AlertDetail() {
             )}
           </div>
 
-          <p className="rounded-lg border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-200">
-            {alert.content}
-          </p>
-
-          <div>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Targets
-            </h2>
-            <ul className="space-y-1 text-sm text-slate-300">
-              {alert.targets.map((target, index) => (
-                <li key={index}>{describeTarget(target, barangays)}</li>
-              ))}
-            </ul>
-          </div>
+          <AlertForm
+            key={`${alert.id}-${alert.updatedAt}`}
+            barangays={barangays}
+            initialValue={initialValue}
+            submitLabel="Save changes"
+            readOnly={alert.status !== 'DRAFT'}
+            busy={busy}
+            onSubmit={handleSave}
+          />
 
           {preview && (
             <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-4">
@@ -146,7 +150,7 @@ export function AlertDetail() {
                   Preview recipients
                 </button>
                 <button type="button" className="button" onClick={handleConfirm} disabled={busy}>
-                  {busy ? 'Sending…' : 'Send alert'}
+                  {busy ? 'Sending...' : 'Send alert'}
                 </button>
               </>
             ) : (

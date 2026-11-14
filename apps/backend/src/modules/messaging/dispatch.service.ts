@@ -1,5 +1,6 @@
 import { AlertStatus, DeliveryStatus, PrismaClient } from '@prisma/client';
 import { env } from '../../config/env';
+import { fanOutFailureNotifications } from '../notifications/notification.service';
 import type { MessagingProvider, SendResult } from './provider';
 
 export interface DispatchRecipient {
@@ -70,5 +71,10 @@ export async function dispatchAlert(
     }
   }
 
-  await prisma.alert.update({ where: { id: alertId }, data: { status: AlertStatus.COMPLETED } });
+  const completedAt = new Date();
+  await prisma.alert.update({
+    where: { id: alertId },
+    data: { status: AlertStatus.COMPLETED }
+  });
+  await fanOutFailureNotifications(prisma, alertId, completedAt);
 }

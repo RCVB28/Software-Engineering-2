@@ -4,6 +4,7 @@ import { MockProvider } from '../../src/modules/messaging/mock.provider';
 
 interface FakeRecord {
   id: string;
+  alertId: string;
   status: string;
   attempts: number;
   providerMessageId?: string | null;
@@ -24,11 +25,24 @@ function createFakePrisma() {
     Object.assign(record!, data);
     return record;
   });
+  const count = jest.fn(
+    async ({ where }: any) =>
+      [...records.values()].filter(
+        (record) =>
+          record.status === where.status &&
+          (where.alertId === undefined || record.alertId === where.alertId)
+      ).length
+  );
   const alertUpdate = jest.fn(async () => ({}));
   return {
     prisma: {
-      alert: { update: alertUpdate },
-      deliveryRecord: { findUnique, create, update }
+      alert: {
+        update: alertUpdate,
+        findUniqueOrThrow: jest.fn(async () => ({ createdByAdminId: 'admin-1', targets: [] }))
+      },
+      administrator: { findMany: jest.fn(async () => []) },
+      failureNotification: { upsert: jest.fn(async () => ({})) },
+      deliveryRecord: { findUnique, create, update, count }
     } as unknown as PrismaClient,
     records,
     alertUpdate

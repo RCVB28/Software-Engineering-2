@@ -1,0 +1,442 @@
+openapi: 3.0.3
+info:
+  title: Alert Operations Completion API (delta)
+  version: 0.2.0
+  description: >
+    Delta contract for feature 002. It defines the endpoints added or whose behavior is extended by
+    this feature. Endpoints not listed here remain governed by
+    `specs/001-emergency-alert-platform/contracts/openapi.yaml`. All endpoints require a bearer JWT
+    and enforce role and jurisdiction scoping server-side. Timestamps are ISO 8601 UTC instants.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+  - url: https://api.example.com
+    description: Deployment (Render/Railway)
+
+tags:
+  - name: Admin Alerts
+  - name: Admin Notifications
+  - name: Resident Alerts
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/admin/alerts/history:
+    get:
+      tags: [Admin Alerts]
+      summary: Paged and filterable alert history
+      description: >
+        Returns alerts visible to the authenticated administrator, newest first with a stable
+        `createdAt DESC, id DESC` order. All provided filters are ANDed with the caller's
+        jurisdiction. LOW_LEVEL administrators may only filter by their own barangay. A requested
+        page beyond the last page is clamped to the last valid page and `pageAdjusted` is true.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/StatusFilter'
+        - $ref: '#/components/parameters/CategoryFilter'
+        - $ref: '#/components/parameters/BarangayFilter'
+        - $ref: '#/components/parameters/FromFilter'
+        - $ref: '#/components/parameters/ToFilter'
+        - $ref: '#/components/parameters/SearchFilter'
+      responses:
+        '200':
+          description: Page of matching alerts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AlertHistoryPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/admin/alerts/{alertId}:
+    patch:
+      tags: [Admin Alerts]
+      summary: Update a draft alert
+      description: >
+        Updates the message, category, and/or targets of an alert that is still DRAFT. Validation
+        and LOW_LEVEL target-jurisdiction rules are identical to draft creation. The save is
+        rejected with 409 `INVALID_STATE` if the alert is no longer a draft; the client must reload
+        before retrying. Concurrent saves are allowed and the last successful save wins. Sent alerts
+        are immutable.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertUpdateRequest' }
+      responses:
+        '200':
+          description: Updated draft
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /api/admin/notifications:
+    get:
+      tags: [Admin Notifications]
+      summary: List failure notifications for the authenticated administrator
+      description: >
+        Returns the caller's persisted failure notifications, newest first. Acknowledged
+        notifications remain in the list. `unreadCount` always reflects the caller's total unread
+        notifications and is independent of the `unreadOnly` filter.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: unreadOnly
+          in: query
+          required: false
+          description: When true, return only unread notifications.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Page of notifications
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FailureNotificationPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/admin/notifications/{notificationId}/acknowledge:
+    post:
+      tags: [Admin Notifications]
+      summary: Acknowledge a failure notification
+      description: >
+        Marks the caller's notification as read. The operation is idempotent. Notifications that do
+        not exist or belong to another administrator return 404 without revealing ownership.
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Acknowledged notification
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FailureNotification' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/residents/me/alert-history:
+    get:
+      tags: [Resident Alerts]
+      summary: Personal alert history for the authenticated resident
+      description: >
+        Returns alerts for which the authenticated resident has delivery records, newest first with
+        a stable order. The resident identity always comes from the JWT; there is no resident
+        identifier parameter, so one resident cannot request another resident's history. Multiple
+        phone deliveries for one alert are aggregated into one outcome.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Page of personal alert history entries
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResidentAlertHistoryPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      description: One-based page number. Defaults to 1.
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      description: Number of items per page. Defaults to 20.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    StatusFilter:
+      name: status
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/AlertStatus' }
+    CategoryFilter:
+      name: category
+      in: query
+      required: false
+      schema: { $ref: '#/components/schemas/AlertCategory' }
+    BarangayFilter:
+      name: barangayId
+      in: query
+      required: false
+      description: >
+        Matches alerts with a target for this barangay or with an all-barangay target. LOW_LEVEL
+        administrators may use only their own barangay.
+      schema: { type: string, format: uuid }
+    FromFilter:
+      name: from
+      in: query
+      required: false
+      description: Inclusive lower bound on alert creation time.
+      schema: { type: string, format: date-time }
+    ToFilter:
+      name: to
+      in: query
+      required: false
+      description: Inclusive upper bound on alert creation time. Must be greater than or equal to `from`.
+      schema: { type: string, format: date-time }
+    SearchFilter:
+      name: q
+      in: query
+      required: false
+      description: Case-insensitive substring search on alert message text.
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    AlertId:
+      name: alertId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+    AlertStatus:
+      type: string
+      enum: [DRAFT, CONFIRMED, SENDING, COMPLETED]
+    AlertCategory:
+      type: string
+      enum:
+        - FIRE
+        - FLOOD
+        - MEDICAL
+        - SECURITY_THREAT
+        - POWER_OUTAGE
+        - INFRASTRUCTURE_DAMAGE
+        - OTHER
+    ResidentRole:
+      type: string
+      enum: [RESIDENT, STUDENT, TEACHER, EMPLOYEE, OTHER]
+    ResidentDeliveryOutcome:
+      type: string
+      description: >
+        PENDING when any own delivery is SUBMITTED or DELAYED; SUCCESS when all are SUCCESS; FAILURE
+        when all are FAILURE; PARTIAL when successes and failures are mixed.
+      enum: [SUCCESS, FAILURE, PARTIAL, PENDING]
+
+    AlertTarget:
+      type: object
+      required: [barangayId, residentRole]
+      properties:
+        barangayId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Null means all barangays.
+        residentRole:
+          allOf:
+            - $ref: '#/components/schemas/ResidentRole'
+          nullable: true
+          description: Null means all roles.
+
+    AlertUpdateRequest:
+      type: object
+      minProperties: 1
+      properties:
+        content: { type: string, minLength: 1, maxLength: 480 }
+        category: { $ref: '#/components/schemas/AlertCategory' }
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/AlertTarget' }
+      additionalProperties: false
+
+    Alert:
+      type: object
+      required: [id, content, category, status, targets, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        content: { type: string, maxLength: 480 }
+        category: { $ref: '#/components/schemas/AlertCategory' }
+        status: { $ref: '#/components/schemas/AlertStatus' }
+        createdByAdminId: { type: string, format: uuid }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+        targets:
+          type: array
+          items: { $ref: '#/components/schemas/AlertTarget' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AlertHistoryItem:
+      type: object
+      required:
+        - id
+        - content
+        - category
+        - status
+        - targets
+        - createdAt
+        - failureCount
+      properties:
+        id: { type: string, format: uuid }
+        content: { type: string, maxLength: 480 }
+        category: { $ref: '#/components/schemas/AlertCategory' }
+        status: { $ref: '#/components/schemas/AlertStatus' }
+        targets:
+          type: array
+          items: { $ref: '#/components/schemas/AlertTarget' }
+        createdAt: { type: string, format: date-time }
+        confirmedAt: { type: string, format: date-time, nullable: true }
+        failureCount:
+          type: integer
+          minimum: 0
+          description: Number of terminal FAILURE delivery records for the alert.
+
+    BarangayOption:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    AlertHistoryPage:
+      type: object
+      required:
+        - items
+        - page
+        - pageSize
+        - total
+        - totalPages
+        - pageAdjusted
+        - availableBarangays
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AlertHistoryItem' }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+        pageAdjusted:
+          type: boolean
+          description: True when the requested page was beyond the last page and was clamped.
+        availableBarangays:
+          type: array
+          description: Barangays the caller may use in the barangay filter.
+          items: { $ref: '#/components/schemas/BarangayOption' }
+
+    FailureNotification:
+      type: object
+      required:
+        - id
+        - alertId
+        - alertCategory
+        - alertContent
+        - failureCount
+        - completedAt
+        - readAt
+        - createdAt
+      properties:
+        id: { type: string, format: uuid }
+        alertId: { type: string, format: uuid }
+        alertCategory: { $ref: '#/components/schemas/AlertCategory' }
+        alertContent: { type: string, maxLength: 480 }
+        failureCount: { type: integer, minimum: 1 }
+        completedAt: { type: string, format: date-time }
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null while unread.
+        createdAt: { type: string, format: date-time }
+
+    FailureNotificationPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages, unreadCount]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/FailureNotification' }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Total unread notifications for the caller, independent of filters.
+
+    ResidentAlertHistoryItem:
+      type: object
+      required: [alertId, category, content, sentAt, outcome]
+      properties:
+        alertId: { type: string, format: uuid }
+        category: { $ref: '#/components/schemas/AlertCategory' }
+        content: { type: string, maxLength: 480 }
+        sentAt: { type: string, format: date-time }
+        outcome: { $ref: '#/components/schemas/ResidentDeliveryOutcome' }
+
+    ResidentAlertHistoryPage:
+      type: object
+      required: [items, page, pageSize, total, totalPages, pageAdjusted]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ResidentAlertHistoryItem' }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        totalPages: { type: integer, minimum: 0 }
+        pageAdjusted:
+          type: boolean
+          description: True when the requested page was beyond the last page and was clamped.
+
+    Error:
+      type: object
+      required: [message, code]
+      properties:
+        message: { type: string }
+        code: { type: string, example: VALIDATION_ERROR }
+        details:
+          type: array
+          items: { type: string }
+
+  responses:
+    BadRequest:
+      description: Invalid input or query parameters
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Role or jurisdiction does not allow the operation
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found or not owned by the caller
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: >
+        The alert is no longer editable, or it changed after the client read it. The alert is
+        unchanged and the client must reload before retrying.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

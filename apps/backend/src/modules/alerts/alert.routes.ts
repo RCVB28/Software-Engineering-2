@@ -5,6 +5,7 @@ import {
   confirmAlertHandler,
   createAlertHandler,
   getAlertHandler,
+  listAlertHistoryHandler,
   listAlertsHandler,
   listDeliveriesHandler,
   previewRecipientsHandler,
@@ -17,6 +18,7 @@ alertRouter.use('/admin/alerts', authenticate, requireAdmin);
 
 alertRouter.get('/admin/alerts', listAlertsHandler);
 alertRouter.post('/admin/alerts', createAlertHandler);
+alertRouter.get('/admin/alerts/history', listAlertHistoryHandler);
 alertRouter.get('/admin/alerts/:alertId', getAlertHandler);
 alertRouter.patch('/admin/alerts/:alertId', updateAlertHandler);
 alertRouter.get('/admin/alerts/:alertId/recipients', previewRecipientsHandler);

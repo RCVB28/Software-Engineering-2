@@ -27,7 +27,7 @@ export function matchesTarget(
 }
 
 export async function resolveRecipients(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'resident'>,
   targets: TargetInput[],
   category: AlertCategory
 ): Promise<Recipient[]> {

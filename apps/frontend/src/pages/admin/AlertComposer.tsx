@@ -1,40 +1,24 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { AlertForm } from '../../components/AlertForm';
 import { StatusBadge } from '../../components/StatusBadge';
-import { formatDate } from '../../components/format';
+import { describeTarget, formatDate } from '../../components/format';
 import { ApiError, api } from '../../services/api';
 import {
-  ALERT_CATEGORIES,
-  RESIDENT_ROLES,
   humanize,
   type Alert,
-  type AlertCategory,
-  type AlertTarget,
+  type AlertInput,
   type Barangay,
-  type RecipientPreview,
-  type ResidentRole
+  type RecipientPreview
 } from '../../types';
 
-interface TargetRow {
-  barangayId: string;
-  residentRole: string;
-}
-
-const emptyTarget: TargetRow = { barangayId: '', residentRole: '' };
-
-function describeTarget(target: AlertTarget, barangays: Barangay[]): string {
-  const parts: string[] = [];
-  if (target.barangayId) {
-    parts.push(barangays.find((barangay) => barangay.id === target.barangayId)?.name ?? target.barangayId);
-  }
-  if (target.residentRole) parts.push(humanize(target.residentRole));
-  return parts.join(' · ') || 'Everyone';
-}
+const emptyAlert: AlertInput = {
+  content: '',
+  category: 'FLOOD',
+  targets: [{ barangayId: null, residentRole: null }]
+};
 
 export function AlertComposer() {
-  const [content, setContent] = useState('');
-  const [category, setCategory] = useState<AlertCategory>('FLOOD');
-  const [targets, setTargets] = useState<TargetRow[]>([{ ...emptyTarget }]);
   const [barangays, setBarangays] = useState<Barangay[]>([]);
   const [draft, setDraft] = useState<Alert | null>(null);
   const [preview, setPreview] = useState<RecipientPreview | null>(null);
@@ -54,40 +38,13 @@ export function AlertComposer() {
     loadRecent();
   }, []);
 
-  const updateTarget = (index: number, field: keyof TargetRow, value: string) => {
-    setTargets((current) =>
-      current.map((target, position) => (position === index ? { ...target, [field]: value } : target))
-    );
-  };
-
-  const toTargets = (): AlertTarget[] =>
-    targets.map((target) => ({
-      barangayId: target.barangayId || null,
-      residentRole: (target.residentRole || null) as ResidentRole | null
-    }));
-
-  const validate = (): string | null => {
-    if (!content.trim()) return 'Enter an alert message.';
-    if (targets.length === 0) return 'Add at least one target.';
-    if (targets.some((target) => !target.barangayId && !target.residentRole)) {
-      return 'Every target needs a barangay, a resident role, or both.';
-    }
-    return null;
-  };
-
-  const handleSaveDraft = async (event: FormEvent) => {
-    event.preventDefault();
-    const problem = validate();
-    if (problem) {
-      setError(problem);
-      return;
-    }
+  const handleSave = async (input: AlertInput) => {
     setBusy(true);
     setError(null);
     try {
       const saved = draft
-        ? await api.alerts.update(draft.id, { content: content.trim(), category, targets: toTargets() })
-        : await api.alerts.create({ content: content.trim(), category, targets: toTargets() });
+        ? await api.alerts.update(draft.id, input)
+        : await api.alerts.create(input);
       setDraft(saved);
       setPreview(null);
       loadRecent();
@@ -133,9 +90,13 @@ export function AlertComposer() {
   const reset = () => {
     setDraft(null);
     setPreview(null);
-    setContent('');
-    setTargets([{ ...emptyTarget }]);
+    setError(null);
   };
+
+  const initialValue: AlertInput = draft
+    ? { content: draft.content, category: draft.category, targets: draft.targets }
+    : emptyAlert;
+  const isDraft = draft?.status === 'DRAFT';
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -156,116 +117,33 @@ export function AlertComposer() {
           </p>
         )}
 
-        <form className="space-y-5" onSubmit={handleSaveDraft}>
-          <div>
-            <label className="label" htmlFor="content">
-              Message
-            </label>
-            <textarea
-              id="content"
-              className="input min-h-28"
-              maxLength={480}
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              placeholder="Evacuate immediately to the nearest evacuation center…"
-            />
-            <p className="mt-1 text-right text-xs text-slate-500">{content.length}/480</p>
-          </div>
+        <AlertForm
+          key={draft ? `${draft.id}-${draft.updatedAt}` : 'new'}
+          barangays={barangays}
+          initialValue={initialValue}
+          submitLabel={draft ? 'Update draft' : 'Save draft'}
+          readOnly={Boolean(draft) && !isDraft}
+          busy={busy}
+          onSubmit={handleSave}
+        />
 
-          <div>
-            <label className="label" htmlFor="category">
-              Category
-            </label>
-            <select
-              id="category"
-              className="input"
-              value={category}
-              onChange={(event) => setCategory(event.target.value as AlertCategory)}
-            >
-              {ALERT_CATEGORIES.map((item) => (
-                <option key={item} value={item}>
-                  {humanize(item)}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="label mb-0">Targets</span>
-              <button
-                type="button"
-                className="button-secondary py-1 text-xs"
-                onClick={() => setTargets((current) => [...current, { ...emptyTarget }])}
-              >
-                Add target
+        <div className="mt-5 flex flex-wrap gap-3">
+          {isDraft && (
+            <>
+              <button type="button" className="button-secondary" onClick={handlePreview} disabled={busy}>
+                Preview recipients
               </button>
-            </div>
-            <div className="space-y-3">
-              {targets.map((target, index) => (
-                <div key={index} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                  <select
-                    className="input"
-                    value={target.barangayId}
-                    onChange={(event) => updateTarget(index, 'barangayId', event.target.value)}
-                  >
-                    <option value="">All barangays</option>
-                    {barangays.map((barangay) => (
-                      <option key={barangay.id} value={barangay.id}>
-                        {barangay.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="input"
-                    value={target.residentRole}
-                    onChange={(event) => updateTarget(index, 'residentRole', event.target.value)}
-                  >
-                    <option value="">All roles</option>
-                    {RESIDENT_ROLES.map((item) => (
-                      <option key={item} value={item}>
-                        {humanize(item)}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="button-secondary"
-                    onClick={() =>
-                      setTargets((current) =>
-                        current.length === 1 ? current : current.filter((_, position) => position !== index)
-                      )
-                    }
-                    disabled={targets.length === 1}
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button className="button" type="submit" disabled={busy}>
-              {draft ? 'Update draft' : 'Save draft'}
+              <button type="button" className="button" onClick={handleConfirm} disabled={busy}>
+                Confirm &amp; broadcast
+              </button>
+            </>
+          )}
+          {draft && (
+            <button type="button" className="button-secondary" onClick={reset}>
+              New alert
             </button>
-            {draft && draft.status === 'DRAFT' && (
-              <>
-                <button type="button" className="button-secondary" onClick={handlePreview} disabled={busy}>
-                  Preview recipients
-                </button>
-                <button type="button" className="button" onClick={handleConfirm} disabled={busy}>
-                  Confirm &amp; broadcast
-                </button>
-              </>
-            )}
-            {draft && (
-              <button type="button" className="button-secondary" onClick={reset}>
-                New alert
-              </button>
-            )}
-          </div>
-        </form>
+          )}
+        </div>
 
         {preview && (
           <div className="mt-6 rounded-lg border border-slate-800 bg-slate-950/60 p-4">
@@ -288,7 +166,17 @@ export function AlertComposer() {
           </div>
         )}
 
-        {draft && draft.status !== 'DRAFT' && (
+        {isDraft && (
+          <div className="mt-6 rounded-lg border border-sky-800 bg-sky-950/40 p-4 text-sm text-sky-200">
+            Draft saved.{' '}
+            <Link className="underline" to={`/admin/alerts/${draft.id}`}>
+              Open the draft page
+            </Link>{' '}
+            to preview recipients and send the alert.
+          </div>
+        )}
+
+        {draft && !isDraft && (
           <div className="mt-6 rounded-lg border border-emerald-800 bg-emerald-950/40 p-4 text-sm text-emerald-200">
             Alert {draft.status.toLowerCase()} at {formatDate(draft.confirmedAt)}.{' '}
             <Link className="underline" to={`/admin/alerts/${draft.id}/deliveries`}>
@@ -299,15 +187,24 @@ export function AlertComposer() {
       </section>
 
       <aside className="card h-fit">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Recent alerts
-        </h2>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Recent alerts
+          </h2>
+          <Link className="text-xs underline text-slate-400" to="/admin/history">
+            View all history
+          </Link>
+        </div>
         <div className="space-y-3">
           {recent.length === 0 && <p className="text-sm text-slate-500">No alerts yet.</p>}
           {recent.map((alert) => (
             <Link
               key={alert.id}
-              to={`/admin/alerts/${alert.id}/deliveries`}
+              to={
+                alert.status === 'DRAFT'
+                  ? `/admin/alerts/${alert.id}`
+                  : `/admin/alerts/${alert.id}/deliveries`
+              }
               className="block rounded-lg border border-slate-800 p-3 transition hover:border-slate-600"
             >
               <div className="flex items-center justify-between gap-2">
@@ -316,7 +213,7 @@ export function AlertComposer() {
               </div>
               <p className="mt-1 line-clamp-2 text-xs text-slate-400">{alert.content}</p>
               <p className="mt-1 text-xs text-slate-500">
-                {alert.targets.map((target) => describeTarget(target, barangays)).join(' · ')}
+                {alert.targets.map((target) => describeTarget(target, barangays)).join(' / ')}
               </p>
             </Link>
           ))}

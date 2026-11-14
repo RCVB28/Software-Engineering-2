@@ -67,6 +67,12 @@ enum ActorType {
   SYSTEM
 }
 
+enum RetentionRunStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
 model Locality {
   id        String     @id @default(uuid())
   name      String     @unique
@@ -76,16 +82,16 @@ model Locality {
 }
 
 model Barangay {
-  id             String          @id @default(uuid())
+  id             String            @id @default(uuid())
   localityId     String
   name           String
-  locality       Locality        @relation(fields: [localityId], references: [id], onDelete: Cascade)
+  locality       Locality          @relation(fields: [localityId], references: [id], onDelete: Cascade)
   residents      Resident[]
   administrators Administrator[]
   alertTargets   AlertTarget[]
   reports        EmergencyReport[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@unique([localityId, name])
 }
@@ -141,33 +147,40 @@ model AlertPreference {
 }
 
 model Administrator {
-  id             String   @id @default(uuid())
-  email          String   @unique
-  passwordHash   String
-  role           AdminRole
-  barangayId     String?
-  displayName    String?
-  isActive       Boolean  @default(true)
-  barangay       Barangay? @relation(fields: [barangayId], references: [id])
-  createdAlerts  Alert[]
-  reviewedReports EmergencyReport[]
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                   String                @id @default(uuid())
+  email                String                @unique
+  passwordHash         String
+  role                 AdminRole
+  barangayId           String?
+  displayName          String?
+  isActive             Boolean               @default(true)
+  barangay             Barangay?             @relation(fields: [barangayId], references: [id])
+  createdAlerts        Alert[]
+  reviewedReports      EmergencyReport[]
+  failureNotifications FailureNotification[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 }
 
 model Alert {
-  id               String           @id @default(uuid())
-  content          String
-  category         AlertCategory
-  createdByAdminId String
-  status           AlertStatus      @default(DRAFT)
-  confirmedAt      DateTime?
-  createdBy        Administrator    @relation(fields: [createdByAdminId], references: [id])
-  targets          AlertTarget[]
-  deliveries       DeliveryRecord[]
-  escalationReports EmergencyReport[]
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                   String                @id @default(uuid())
+  content              String
+  category             AlertCategory
+  createdByAdminId     String
+  status               AlertStatus           @default(DRAFT)
+  confirmedAt          DateTime?
+  createdBy            Administrator         @relation(fields: [createdByAdminId], references: [id])
+  targets              AlertTarget[]
+  deliveries           DeliveryRecord[]
+  escalationReports    EmergencyReport[]
+  failureNotifications FailureNotification[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([category])
+  @@index([createdByAdminId])
 }
 
 model AlertTarget {
@@ -177,6 +190,8 @@ model AlertTarget {
   residentRole ResidentRole?
   alert        Alert         @relation(fields: [alertId], references: [id], onDelete: Cascade)
   barangay     Barangay?     @relation(fields: [barangayId], references: [id])
+
+  @@index([barangayId])
 }
 
 model DeliveryRecord {
@@ -195,38 +210,40 @@ model DeliveryRecord {
   updatedAt         DateTime       @updatedAt
 
   @@unique([alertId, residentId, phoneNumber])
+  @@index([alertId, status])
+  @@index([residentId])
 }
 
 model EmergencyReport {
-  id               String               @id @default(uuid())
-  residentId       String
-  barangayId       String
-  category         AlertCategory
-  severity         ReportSeverity
-  description      String
-  latitude         Float?
-  longitude        Float?
-  addressText      String?
-  status           ReportStatus         @default(NEW)
+  id                String                @id @default(uuid())
+  residentId        String
+  barangayId        String
+  category          AlertCategory
+  severity          ReportSeverity
+  description       String
+  latitude          Float?
+  longitude         Float?
+  addressText       String?
+  status            ReportStatus          @default(NEW)
   reviewedByAdminId String?
-  escalatedAlertId String?
-  resident         Resident             @relation(fields: [residentId], references: [id])
-  barangay         Barangay             @relation(fields: [barangayId], references: [id])
-  reviewedBy       Administrator?       @relation(fields: [reviewedByAdminId], references: [id])
-  escalatedAlert   Alert?               @relation(fields: [escalatedAlertId], references: [id])
-  history          ReportStatusHistory[]
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  escalatedAlertId  String?
+  resident          Resident              @relation(fields: [residentId], references: [id])
+  barangay          Barangay              @relation(fields: [barangayId], references: [id])
+  reviewedBy        Administrator?        @relation(fields: [reviewedByAdminId], references: [id])
+  escalatedAlert    Alert?                @relation(fields: [escalatedAlertId], references: [id])
+  history           ReportStatusHistory[]
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 }
 
 model ReportStatusHistory {
-  id              String        @id @default(uuid())
-  reportId        String
-  fromStatus      ReportStatus?
-  toStatus        ReportStatus
+  id               String          @id @default(uuid())
+  reportId         String
+  fromStatus       ReportStatus?
+  toStatus         ReportStatus
   changedByAdminId String?
-  changedAt       DateTime      @default(now())
-  report          EmergencyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  changedAt        DateTime        @default(now())
+  report           EmergencyReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 }
 
 model AuditEntry {
@@ -240,4 +257,34 @@ model AuditEntry {
   createdAt  DateTime  @default(now())
 
   @@index([createdAt])
+}
+
+model AuditRetentionRun {
+  id           String             @id @default(uuid())
+  status       RetentionRunStatus @default(RUNNING)
+  startedAt    DateTime           @default(now())
+  finishedAt   DateTime?
+  removedCount Int                @default(0)
+  error        String?
+  createdAt    DateTime           @default(now())
+
+  @@index([startedAt])
+}
+
+model FailureNotification {
+  id           String        @id @default(uuid())
+  adminId      String
+  alertId      String
+  failureCount Int
+  completedAt  DateTime
+  readAt       DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  admin        Administrator @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  alert        Alert         @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([adminId, alertId])
+  @@index([adminId, readAt])
+  @@index([alertId])
+  @@index([adminId, createdAt])
 }

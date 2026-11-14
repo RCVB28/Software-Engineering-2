@@ -23,6 +23,8 @@ export function authHeader(token: string): { Authorization: string } {
 }
 
 export async function resetDatabase(): Promise<void> {
+  await prisma.failureNotification.deleteMany();
+  await prisma.auditRetentionRun.deleteMany();
   await prisma.reportStatusHistory.deleteMany();
   await prisma.deliveryRecord.deleteMany();
   await prisma.alertTarget.deleteMany();

@@ -1,12 +1,14 @@
 import {
   AlertCategory,
   AlertStatus,
+  DeliveryStatus,
   Prisma,
   PrismaClient,
   Resident,
   ResidentRole
 } from '@prisma/client';
 import { AppError } from '../../middleware/error';
+import { resolvePagination } from '../../middleware/query';
 import { normalizePhone } from '../../middleware/validation';
 import { recordAudit } from '../audit/audit.service';
 
@@ -215,6 +217,67 @@ export async function listAnnouncements(prisma: PrismaClient, residentId: string
     include: { targets: true },
     orderBy: { createdAt: 'desc' }
   });
+}
+
+export type ResidentDeliveryOutcome = 'PENDING' | 'SUCCESS' | 'FAILURE' | 'PARTIAL';
+
+export function aggregateResidentOutcome(
+  statuses: DeliveryStatus[]
+): ResidentDeliveryOutcome {
+  if (statuses.some((status) => status === DeliveryStatus.SUBMITTED || status === DeliveryStatus.DELAYED)) {
+    return 'PENDING';
+  }
+  const successCount = statuses.filter((status) => status === DeliveryStatus.SUCCESS).length;
+  if (successCount === statuses.length) return 'SUCCESS';
+  if (successCount === 0) return 'FAILURE';
+  return 'PARTIAL';
+}
+
+export function resolveResidentAlertSentAt(alert: {
+  confirmedAt: Date | null;
+  createdAt: Date;
+}): Date {
+  return alert.confirmedAt ?? alert.createdAt;
+}
+
+export async function listResidentAlertHistory(
+  prisma: PrismaClient,
+  residentId: string,
+  requestedPage: number,
+  pageSize: number
+) {
+  const where: Prisma.AlertWhereInput = { deliveries: { some: { residentId } } };
+  const total = await prisma.alert.count({ where });
+  const pagination = resolvePagination(requestedPage, pageSize, total);
+
+  const alerts = await prisma.alert.findMany({
+    where,
+    select: {
+      id: true,
+      category: true,
+      content: true,
+      createdAt: true,
+      confirmedAt: true,
+      deliveries: {
+        where: { residentId },
+        select: { status: true }
+      }
+    },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    skip: (pagination.page - 1) * pagination.pageSize,
+    take: pagination.pageSize
+  });
+
+  return {
+    ...pagination,
+    items: alerts.map((alert) => ({
+      alertId: alert.id,
+      category: alert.category,
+      content: alert.content,
+      sentAt: resolveResidentAlertSentAt(alert),
+      outcome: aggregateResidentOutcome(alert.deliveries.map((delivery) => delivery.status))
+    }))
+  };
 }
 
 export async function listOwnReports(prisma: PrismaClient, residentId: string) {

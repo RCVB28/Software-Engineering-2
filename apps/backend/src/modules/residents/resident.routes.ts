@@ -6,6 +6,7 @@ import {
   getConsentHandler,
   getPreferencesHandler,
   getProfileHandler,
+  listAlertHistoryHandler,
   listAnnouncementsHandler,
   listOwnReportsHandler,
   listPhonesHandler,
@@ -34,3 +35,4 @@ residentRouter.put('/residents/me/preferences', setPreferencesHandler);
 
 residentRouter.get('/residents/me/announcements', listAnnouncementsHandler);
 residentRouter.get('/residents/me/reports', listOwnReportsHandler);
+residentRouter.get('/residents/me/alert-history', listAlertHistoryHandler);

@@ -1,7 +1,10 @@
 import type {
   Administrator,
   Alert,
+  AlertHistoryFilters,
+  AlertHistoryPage,
   AlertInput,
+  ResidentAlertHistoryPage,
   AlertPreference,
   AuditEntry,
   AuthToken,
@@ -9,6 +12,8 @@ import type {
   Consent,
   DeliveryRecord,
   EmergencyReport,
+  FailureNotification,
+  FailureNotificationPage,
   PhoneNumber,
   RecipientPreview,
   ReportInput,
@@ -131,10 +136,27 @@ export const api = {
         body: JSON.stringify(preferences)
       }),
     announcements: () => request<Alert[]>('/residents/me/announcements'),
-    reports: () => request<EmergencyReport[]>('/residents/me/reports')
+    reports: () => request<EmergencyReport[]>('/residents/me/reports'),
+    alertHistory: (page = 1, pageSize = 10) =>
+      request<ResidentAlertHistoryPage>(
+        `/residents/me/alert-history?page=${page}&pageSize=${pageSize}`
+      )
   },
   alerts: {
     list: () => request<Alert[]>('/admin/alerts'),
+    history: (filters: AlertHistoryFilters = {}) => {
+      const params = new URLSearchParams();
+      if (filters.page) params.set('page', String(filters.page));
+      if (filters.pageSize) params.set('pageSize', String(filters.pageSize));
+      if (filters.status) params.set('status', filters.status);
+      if (filters.category) params.set('category', filters.category);
+      if (filters.barangayId) params.set('barangayId', filters.barangayId);
+      if (filters.from) params.set('from', filters.from);
+      if (filters.to) params.set('to', filters.to);
+      if (filters.q) params.set('q', filters.q);
+      const query = params.toString();
+      return request<AlertHistoryPage>(`/admin/alerts/history${query ? `?${query}` : ''}`);
+    },
     create: (input: AlertInput) =>
       request<Alert>('/admin/alerts', { method: 'POST', body: JSON.stringify(input) }),
     get: (alertId: string) => request<Alert>(`/admin/alerts/${alertId}`),
@@ -149,6 +171,22 @@ export const api = {
       request<Alert>(`/admin/alerts/${alertId}/confirm`, { method: 'POST' }),
     deliveries: (alertId: string) =>
       request<DeliveryRecord[]>(`/admin/alerts/${alertId}/deliveries`)
+  },
+  notifications: {
+    list: (filters: { page?: number; pageSize?: number; unreadOnly?: boolean } = {}) => {
+      const params = new URLSearchParams();
+      if (filters.page) params.set('page', String(filters.page));
+      if (filters.pageSize) params.set('pageSize', String(filters.pageSize));
+      if (filters.unreadOnly) params.set('unreadOnly', 'true');
+      const query = params.toString();
+      return request<FailureNotificationPage>(
+        `/admin/notifications${query ? `?${query}` : ''}`
+      );
+    },
+    acknowledge: (notificationId: string) =>
+      request<FailureNotification>(`/admin/notifications/${notificationId}/acknowledge`, {
+        method: 'POST'
+      })
   },
   reports: {
     submit: (input: ReportInput) =>
