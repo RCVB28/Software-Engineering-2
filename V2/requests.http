@@ -1,0 +1,91 @@
+# Local API requests (VS Code REST Client)
+# Set @adminToken after POST /api/auth/admin/login.
+
+@baseUrl = http://localhost:4000
+@adminToken = <paste-admin-jwt>
+@residentToken = <paste-resident-jwt>
+
+### Health
+GET {{baseUrl}}/api/health
+
+### Admin login (seeded superadmin)
+POST {{baseUrl}}/api/auth/admin/login
+Content-Type: application/json
+
+{
+  "email": "superadmin@example.com",
+  "password": "Password123!"
+}
+
+### Current user
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{adminToken}}
+
+### Messaging provider status (any admin)
+# Reports the active provider and whether Twilio credentials are complete (no secrets returned).
+GET {{baseUrl}}/api/admin/messaging/status
+Authorization: Bearer {{adminToken}}
+
+### Send a test SMS (superadmin only)
+# With MESSAGING_PROVIDER=mock this is a free dry run. Set MESSAGING_PROVIDER=twilio in .env to
+# exercise the real Twilio API; on a trial account the destination must be verified in Twilio first.
+POST {{baseUrl}}/api/admin/messaging/test
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "to": "+639171234567",
+  "body": "LEARW test message"
+}
+
+### Barangays
+GET {{baseUrl}}/api/barangays
+Authorization: Bearer {{adminToken}}
+
+### Create alert draft
+POST {{baseUrl}}/api/admin/alerts
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "content": "Evacuate the building immediately.",
+  "category": "FIRE",
+  "targets": [{ "barangayId": "<barangay-id>", "residentRole": "RESIDENT" }]
+}
+
+### Preview recipients
+GET {{baseUrl}}/api/admin/alerts/<alert-id>/recipients
+Authorization: Bearer {{adminToken}}
+
+### Confirm broadcast
+POST {{baseUrl}}/api/admin/alerts/<alert-id>/confirm
+Authorization: Bearer {{adminToken}}
+
+### Delivery outcomes
+GET {{baseUrl}}/api/admin/alerts/<alert-id>/deliveries
+Authorization: Bearer {{adminToken}}
+
+### Submit a report (resident)
+POST {{baseUrl}}/api/reports
+Authorization: Bearer {{residentToken}}
+Content-Type: application/json
+
+{
+  "category": "FLOOD",
+  "severity": "HIGH",
+  "description": "Knee-deep flooding along the main road.",
+  "addressText": "Poblacion Main Street"
+}
+
+### Admin report triage
+GET {{baseUrl}}/api/admin/reports
+Authorization: Bearer {{adminToken}}
+
+### Update report status
+PATCH {{baseUrl}}/api/admin/reports/<report-id>/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "ACKNOWLEDGED"
+}
