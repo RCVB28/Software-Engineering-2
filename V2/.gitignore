@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.tsbuildinfo
+apps/backend/prisma/dev.db
+apps/backend/prisma/dev.db-journal
