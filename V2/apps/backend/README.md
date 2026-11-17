@@ -1,7 +1,7 @@
 # Backend API
 
 Node.js + Express + TypeScript REST API with Prisma/PostgreSQL, JWT authentication, Google ID-token
-verification for residents, and SMS delivery through Twilio or the built-in mock provider.
+verification for residents, and SMS delivery through Twilio, textbee, or the built-in mock provider.
 
 ## Setup
 
@@ -23,23 +23,26 @@ The API listens on `http://localhost:4000` and exposes `GET /health` and `GET /a
 | `JWT_SECRET` | Signing secret for access tokens |
 | `JWT_EXPIRES_IN` | Token lifetime (default `1h`) |
 | `GOOGLE_CLIENT_ID` | Google OAuth client used to verify resident ID tokens |
-| `MESSAGING_PROVIDER` | `mock` (default) or `twilio` |
+| `MESSAGING_PROVIDER` | `mock` (default), `twilio`, or `textbee` |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | Twilio credentials (required when `MESSAGING_PROVIDER=twilio`) |
+| `TEXTBEE_API_KEY` | textbee API key (required when `MESSAGING_PROVIDER=textbee`) |
+| `TEXTBEE_DEVICE_ID` / `TEXTBEE_BASE_URL` | Optional textbee sending device and API base URL |
 | `CORS_ORIGIN` | Comma-separated allowlist (default `http://localhost:5173`) |
 | `MESSAGING_MAX_RETRIES` / `MESSAGING_RETRY_DELAY_MS` | Dispatch retry policy |
 | `MESSAGING_MOCK_FAILURES` | Simulated failures for the mock provider (default `0`) |
 
-## Verifying SMS / Twilio
+## Verifying SMS
 
 Two admin endpoints make the messaging layer testable without composing a broadcast:
 
 | Method | Path | Who | Purpose |
 | --- | --- | --- | --- |
-| GET | `/api/admin/messaging/status` | any admin | Active provider and whether the Twilio credentials are complete |
+| GET | `/api/admin/messaging/status` | any admin | Active provider and whether its credentials are complete |
 | POST | `/api/admin/messaging/test` | SUPERADMIN | Send one message through the active provider |
 
-With `MESSAGING_PROVIDER=mock` the test endpoint is a free dry run. To exercise the real Twilio API,
-set `MESSAGING_PROVIDER=twilio` plus the three `TWILIO_*` values, then:
+With `MESSAGING_PROVIDER=mock` the test endpoint is a free dry run. To exercise a real provider, set
+`MESSAGING_PROVIDER=twilio` plus the three `TWILIO_*` values, **or** `MESSAGING_PROVIDER=textbee`
+plus `TEXTBEE_API_KEY` (an Android-phone SMS gateway for regions where Twilio is unavailable), then:
 
 ```bash
 curl -X POST http://localhost:4000/api/admin/messaging/test \
@@ -50,8 +53,8 @@ curl -X POST http://localhost:4000/api/admin/messaging/test \
 
 On a Twilio **trial** account only verified destination numbers receive messages, and the `from`
 number must be a Twilio number (or a verified caller ID). A failed send returns
-`{ "result": { "status": "FAILURE", "error": "..." } }` including the Twilio error code, so the
-reason is visible directly in Postman.
+`{ "result": { "status": "FAILURE", "error": "..." } }` including the provider's error code/status, so
+the reason is visible directly in Postman. See the `*‑SMS‑SETUP.md` guides in `V2/` for each provider.
 
 ## Scripts
 

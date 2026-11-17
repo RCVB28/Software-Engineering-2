@@ -10,9 +10,9 @@ export const getMessagingStatusHandler = asyncHandler(async (_req, res) => {
 });
 
 /**
- * Sends a single one-off message through the active provider. With `MESSAGING_PROVIDER=twilio`
- * this is the endpoint to exercise the real Twilio API from Postman; with the mock provider it is a
- * safe, free dry run.
+ * Sends a single one-off message through the active provider. With `MESSAGING_PROVIDER=twilio` or
+ * `textbee` this is the endpoint to exercise the real API from Postman; with the mock provider it is
+ * a safe, free dry run.
  */
 export const sendTestMessageHandler = asyncHandler(async (req, res) => {
   const body = req.body ?? {};

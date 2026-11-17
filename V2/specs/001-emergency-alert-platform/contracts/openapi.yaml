@@ -550,9 +550,9 @@ paths:
       summary: Send a single one-off test message (SUPERADMIN)
       description: >
         Sends one message through the active provider without composing a broadcast. With
-        `MESSAGING_PROVIDER=mock` this is a free dry run; with `MESSAGING_PROVIDER=twilio` it
-        exercises the real Twilio API (a trial account requires the destination number to be
-        verified in Twilio first).
+        `MESSAGING_PROVIDER=mock` this is a free dry run; with `MESSAGING_PROVIDER=twilio` or
+        `textbee` it exercises the real API (a Twilio trial account requires the destination number
+        to be verified in Twilio first).
       requestBody:
         required: true
         content:
@@ -938,12 +938,13 @@ components:
       properties:
         provider:
           type: string
-          enum: [mock, twilio]
+          enum: [mock, twilio, textbee]
         configured: { type: boolean }
         missing:
           type: array
           items: { type: string }
         fromNumber: { type: string, nullable: true }
+        deviceId: { type: string, nullable: true }
         maxRetries: { type: integer }
         retryDelayMs: { type: integer }
 

@@ -7,4 +7,7 @@ process.env.MESSAGING_RETRY_DELAY_MS = '0';
 process.env.TWILIO_ACCOUNT_SID = '';
 process.env.TWILIO_AUTH_TOKEN = '';
 process.env.TWILIO_FROM_NUMBER = '';
+process.env.TEXTBEE_API_KEY = '';
+process.env.TEXTBEE_DEVICE_ID = '';
+process.env.TEXTBEE_BASE_URL = '';
 process.env.GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? 'test-client-id';

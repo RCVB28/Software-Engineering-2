@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-export type MessagingProviderName = 'mock' | 'twilio';
+export type MessagingProviderName = 'mock' | 'twilio' | 'textbee';
 
 /**
  * Normalizes `MESSAGING_PROVIDER` (trim + lowercase) and fails fast on an unknown value so a typo
@@ -10,8 +10,10 @@ export type MessagingProviderName = 'mock' | 'twilio';
  */
 function parseMessagingProvider(value: string | undefined): MessagingProviderName {
   const normalized = (value ?? 'mock').trim().toLowerCase();
-  if (normalized === 'mock' || normalized === 'twilio') return normalized;
-  throw new Error(`MESSAGING_PROVIDER must be "mock" or "twilio" (received "${value ?? ''}")`);
+  if (normalized === 'mock' || normalized === 'twilio' || normalized === 'textbee') return normalized;
+  throw new Error(
+    `MESSAGING_PROVIDER must be "mock", "twilio" or "textbee" (received "${value ?? ''}")`
+  );
 }
 
 export const env = {
@@ -27,6 +29,9 @@ export const env = {
   TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID ?? '',
   TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN ?? '',
   TWILIO_FROM_NUMBER: process.env.TWILIO_FROM_NUMBER ?? '',
+  TEXTBEE_API_KEY: process.env.TEXTBEE_API_KEY ?? '',
+  TEXTBEE_DEVICE_ID: process.env.TEXTBEE_DEVICE_ID ?? '',
+  TEXTBEE_BASE_URL: process.env.TEXTBEE_BASE_URL ?? '',
   CORS_ORIGIN: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   MESSAGING_MAX_RETRIES: Number.parseInt(process.env.MESSAGING_MAX_RETRIES ?? '3', 10),
   MESSAGING_RETRY_DELAY_MS: Number.parseInt(process.env.MESSAGING_RETRY_DELAY_MS ?? '200', 10),
