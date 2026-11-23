@@ -192,7 +192,10 @@ Failure returns the reason and HTTP status:
 | `500 MESSAGING_NOT_CONFIGURED` | `provider=textbee` but `TEXTBEE_API_KEY` is blank. |
 
 **A `200`/`SUCCESS` means textbee accepted and queued the message — not that it was delivered.**
-The phone still has to be online; check the dashboard for `pending → sent → delivered`.
+The phone still has to be online **and the SIM must have enough prepaid load/credit**; check the
+dashboard for `pending → sent → delivered`. The backend writes `DeliveryStatus.SUCCESS` as soon as
+textbee accepts the batch — it cannot see a later carrier rejection, which textbee reports only in
+the app/dashboard.
 
 ---
 
@@ -201,6 +204,8 @@ The phone still has to be online; check the dashboard for `pending → sent → 
 - Free plan: **50 messages/day**, **300/month**, **1 device**.
 - The phone must stay online; offline messages queue until it returns.
 - SMS goes out on the phone's own carrier plan, so normal carrier SMS rates may apply to that SIM.
+- **The SIM needs prepaid load/credit.** With no load, textbee still accepts the batch and our API
+  returns `SUCCESS`, but the app shows "Failed to send" — see the troubleshooting table below.
 
 ---
 
@@ -221,4 +226,5 @@ the free, simulated provider in [`MOCK-SMS-SETUP.md`](./MOCK-SMS-SETUP.md).
 | Check B returns `401` | Wrong/revoked API key. Re-copy from the dashboard. |
 | Check B works but send returns `400` | No enabled device — install/register the app and enable the gateway. |
 | Messages stay `pending` | The phone is offline, has no signal, or the app's SMS permission is off. |
+| API returned `SUCCESS` but the app says "Failed to send" | The SIM has no load/credit, no signal, or the phone is in power-save mode. `SUCCESS` only means textbee queued the batch; the carrier rejection is reported later by the app. |
 | `429` | Free-plan limit reached (50/day, 300/month). |

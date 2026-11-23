@@ -250,3 +250,59 @@ user owns** (the phone's SIM is the sender). This avoids Twilio signup entirely.
 - textbee needs no new npm dependency (uses the built-in `fetch`); Twilio remains available.
 - Full provider setup guides live in `V2/MOCK-SMS-SETUP.md`, `V2/TWILIO-SMS-SETUP.md`, and
   `V2/TEXTBEE-SMS-SETUP.md`.
+
+---
+
+## DEBUGGING - 2026-11-24
+
+### Scope
+Live verification of the textbee path after the Android app was installed and the gateway enabled.
+**No source code changed** — this entry records end-to-end evidence and an important operational
+caveat discovered during the real send.
+
+### Connection checks (no SMS sent)
+- `GET https://api.textbee.dev/api/v1/gateway/stats` → `200`.
+  `totalDeviceCount` went `0 → 1`; `totalApiKeyCount: 2`.
+- `GET .../gateway/devices` → `200`, one device:
+  `enabled: true`, `isDefault: true`, **OPPO CPH2237 / Android 13**, app `2.10.0`,
+  `heartbeatEnabled: true`, `lastHeartbeat: 2026-11-23T21:25:08Z` (~3 minutes old at check time),
+  `networkInfo.networkType: wifi`, `hasSendSmsPermission: true`, `hasReceiveSmsPermission: true`.
+  Note: `simInfo.sims: []` and `hasReadPhoneStatePermission: false` — the app cannot enumerate SIMs,
+  but sending uses the default subscription and worked.
+- App-level check: `GET /api/admin/messaging/status` →
+  `{ "provider": "textbee", "configured": true, "missing": [] }`.
+
+### Live SMS test (sent from the site)
+- `POST /api/admin/messaging/test` →
+  `{ "to": "+639982305607", "body": "LEARW textbee live test" }`
+  (number supplied by the user as a 10-digit PH number, self-send; `+63` prefix added to make it
+  E.164):
+  ```json
+  { "status": "SUCCESS", "providerMessageId": "6b04b0ae96bbd64a7061f910" }
+  ```
+- textbee stats before/after: `totalSentSMSCount` **0 → 1**. This confirms textbee actually
+  dispatched the batch through the registered phone, not merely that our API returned `OK`.
+- The user confirmed the message **arrived on the phone**.
+
+### Caveat discovered: carrier load / credit
+- Even though our API returned `SUCCESS` and textbee's counter incremented, the user reported that
+  the **textbee Android app subsequently showed "Failed to send"**, which they attributed to the SIM
+  having **no prepaid load/credit** left. Both observations are recorded as reported.
+- Therefore a `SUCCESS` from our API (and from textbee's `/send-sms` endpoint) means **accepted and
+  queued**, **not** guaranteed handset delivery. Final delivery additionally depends on the phone
+  being online, having signal, and the SIM having enough load. textbee reports that rejection
+  asynchronously in the app/dashboard; `provider.send()` cannot see it.
+- **Impact on LEARW:** `DeliveryStatus.SUCCESS` is written as soon as textbee accepts the batch, so
+  it must **not** be treated as proof of carrier delivery for textbee. (The same distinction applies
+  conceptually to Twilio's "accepted" state, though Twilio exposes delivery callbacks.)
+  A future improvement would be to poll textbee's delivery-status endpoint or add a webhook.
+
+### Documentation updated
+- `TEXTBEE-SMS-SETUP.md` — added the SIM-load caveat to the "SUCCESS means queued" note, the
+  free-tier reminders, and the troubleshooting table.
+
+### Verification
+- No source changes, so the checks from the previous entry still apply: typecheck PASS, lint PASS,
+  tests PASS (10 suites / 42 tests).
+- `git status` was clean before this log entry; `.env` (which holds the real API key) is gitignored
+  via `V2/.gitignore`, so the key was never committed.
