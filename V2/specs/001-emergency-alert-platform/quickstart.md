@@ -14,6 +14,8 @@ contain implementation code, migrations, or full test suites. Interface details 
 - A Google OAuth client (for resident sign-in); optional for API-only validation if using seeded
   resident sessions
 - Optional: Twilio test credentials (only to validate real provider connectivity)
+- Optional: a textbee account + API key (Android-phone SMS gateway, for regions where Twilio is
+  unavailable)
 - Git
 
 ## Environment variables
@@ -23,8 +25,9 @@ Backend (`apps/backend/.env`):
 - `DATABASE_URL` — PostgreSQL connection string
 - `JWT_SECRET`, `JWT_EXPIRES_IN` — token signing
 - `GOOGLE_CLIENT_ID` — resident Google OAuth
-- `MESSAGING_PROVIDER` — `mock` (default) or `twilio`
+- `MESSAGING_PROVIDER` — `mock` (default), `twilio`, or `textbee`
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` — only when `MESSAGING_PROVIDER=twilio`
+- `TEXTBEE_API_KEY` — only when `MESSAGING_PROVIDER=textbee` (`TEXTBEE_DEVICE_ID` / `TEXTBEE_BASE_URL` optional)
 - `PORT` — API port (default `4000`)
 
 Frontend (`apps/frontend/.env`):

@@ -63,6 +63,6 @@ The suite resets all tables between tests, uses `MockProvider`, and needs no net
 
 1. Run the UI flows in a browser (`npm run dev` for API and SPA) for V1, V3, and V4 click paths.
 2. Exercise a real Google sign-in (`VITE_GOOGLE_CLIENT_ID` + backend `GOOGLE_CLIENT_ID`) and, if
-   desired, a Twilio test credential (`MESSAGING_PROVIDER=twilio`).
+   desired, a real provider credential (`MESSAGING_PROVIDER=twilio` or `textbee`).
 3. Confirm the GitHub Actions workflow is green after the first push; the local run reproduced
    every CI step except the hosted PostgreSQL service and the Actions runner itself.

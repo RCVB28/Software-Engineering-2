@@ -7,7 +7,7 @@ export interface SendResult {
 }
 
 export interface MessagingProvider {
-  /** Stable identifier for the active provider (e.g. `mock`, `twilio`). */
+  /** Stable identifier for the active provider (e.g. `mock`, `twilio`, `textbee`). */
   readonly name: string;
   send(to: string, body: string): Promise<SendResult>;
 }

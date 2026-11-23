@@ -15,7 +15,9 @@ side, run the backend from the repo root (`apps/backend`, original) and from `V2
 
 Related docs (the fixed versions live in `V2/`):
 - `V2/GUIDE.md` — how to stage and push the V2 folder.
-- `V2/apps/backend/README.md` — backend setup and the SMS/Twilio verification section.
+- `V2/MOCK-SMS-SETUP.md`, `V2/TWILIO-SMS-SETUP.md`, `V2/TEXTBEE-SMS-SETUP.md` — provider `.env`
+  configuration and connection-testing guides (mock, Twilio, textbee).
+- `V2/apps/backend/README.md` — backend setup and the SMS verification section.
 - `V2/requests.http` — ready-to-run Postman / VS Code REST Client requests.
 - `V2/specs/001-emergency-alert-platform/contracts/openapi.yaml` — API contract.
 
@@ -157,3 +159,150 @@ by hand.
 - Add a new `## DEBUGGING - <date>` section below this one.
 - The repo root is the original program (commit `17c8795`); `V2/` is the fixed program + this log.
 - `V2/` is committed on branch `add-v2` of `RCVB28/Software-Engineering-2` for teammates to review.
+
+---
+
+## DEBUGGING - 2026-11-17
+
+### Scope
+Follow-up to the messaging fixes. The user could not create a Twilio account because of **regional
+constraints**, so a second real provider was added behind the existing `MessagingProvider`
+abstraction: **textbee.dev**, an open-source SMS gateway that sends through an **Android phone the
+user owns** (the phone's SIM is the sender). This avoids Twilio signup entirely.
+
+### Why textbee
+- No carrier-grade account, no number rental, no A2P registration, no region-locked signup.
+- Free tier: 300 messages/month, 50/day, 1 device.
+- Requirement: a physical Android phone with an active SIM, running the textbee app and kept online.
+- Its API gives a **free connectivity check that sends no SMS** (`GET /gateway/stats` and
+  `GET /gateway/devices`), which also confirms the phone is registered and reporting.
+
+### Issues found and fixed
+
+#### 1. Only two providers were supported
+`src/config/env.ts`
+- `MessagingProviderName` is now `'mock' | 'twilio' | 'textbee'`, and `parseMessagingProvider()`
+  accepts the new value. The fail-fast error now reads
+  `MESSAGING_PROVIDER must be "mock", "twilio" or "textbee"`.
+- Added `TEXTBEE_API_KEY`, `TEXTBEE_DEVICE_ID`, and `TEXTBEE_BASE_URL` to the typed env.
+
+#### 2. New textbee provider
+`src/modules/messaging/textbee.provider.ts` (new)
+- `TextbeeProvider` implements `MessagingProvider` with `name = 'textbee'`.
+- Constructor validates config and throws the same clear
+  `AppError(500, 'MESSAGING_PROVIDER=textbee requires TEXTBEE_API_KEY to be set',
+  'MESSAGING_NOT_CONFIGURED')` used by Twilio.
+- `send()` POSTs to `POST /api/v1/gateway/send-sms` with the `x-api-key` header, maps
+  `data.smsBatchId` to `providerMessageId`, and turns non-2xx responses into a `FAILURE` whose
+  message includes the provider's reason **and** the HTTP status (e.g. `(HTTP 401)`).
+- The constructor accepts an optional config object (defaulting to `env`) so the send path is
+  unit-testable with a mocked `fetch`. Uses the built-in `fetch` — no new dependency.
+
+#### 3. Provider selection and status
+`src/modules/messaging/index.ts`
+- `getProvider()` now selects mock / twilio / textbee.
+- `getProviderInfo()` reports `missing` for whichever provider is active and exposes a new
+  `deviceId` field (the textbee analogue of Twilio's `fromNumber`; `null` otherwise). No secrets
+  are returned.
+
+### Documentation updated
+- `apps/backend/.env.example` — textbee block.
+- `apps/backend/README.md` — provider table + textbee notes.
+- `requests.http` — comments mention twilio **or** textbee.
+- `specs/.../contracts/openapi.yaml` — `MessagingStatus.provider` enum adds `textbee`; added
+  `deviceId`.
+- `specs/.../quickstart.md`, `specs/.../validation.md` — provider lists.
+- `README.md` — textbee row + updated file list and test counts.
+- New `V2/MOCK-SMS-SETUP.md`, `V2/TWILIO-SMS-SETUP.md`, `V2/TEXTBEE-SMS-SETUP.md` — step-by-step
+  `.env` configuration and connection-testing guides for each provider.
+
+### Tests added
+`tests/unit/messaging.test.ts` — a `TextbeeProvider` suite:
+- `missingTextbeeConfig()` reports the missing key.
+- The constructor throws a clear error when the key is absent.
+- `send()` posts the right URL/headers/body and returns the batch id on success.
+- A non-2xx response surfaces the provider message and status code.
+- A thrown network error is reported as a `FAILURE`, not propagated.
+`tests/setup.ts` — clears `TEXTBEE_*` so tests never depend on local credentials.
+
+### Verification (after changes)
+| Check | Command | Result |
+| --- | --- | --- |
+| Types | `npm run typecheck` | PASS |
+| Lint | `npm run lint` | PASS |
+| Tests | `npm test` | PASS — 10 suites / 42 tests (9 DB suites skipped) |
+
+### How to verify textbee through Postman (no SMS sent)
+1. Log in as the seeded superadmin to get a JWT:
+   `POST /api/auth/admin/login` → `{ "email": "superadmin@example.com", "password": "Password123!" }`.
+2. Confirm the app loaded the config: `GET /api/admin/messaging/status` with
+   `Authorization: Bearer <token>` → `{ "provider": "textbee", "configured": true, "missing": [] }`.
+3. Free connection check — call textbee directly, no SMS:
+   `GET https://api.textbee.dev/api/v1/gateway/stats` with header `x-api-key: <TEXTBEE_API_KEY>`.
+   `200` means the key is valid; `401` means it is missing/invalid/revoked.
+   Optionally `GET https://api.textbee.dev/api/v1/gateway/devices` to confirm a phone is
+   `enabled` with a recent `lastHeartbeat`.
+4. Real SMS (optional): with the phone registered and online,
+   `POST /api/admin/messaging/test` → `{ "to": "+639171234567", "body": "LEARW test" }`.
+
+### Notes for the next append
+- Add a new `## DEBUGGING - <date>` section below this one.
+- textbee needs no new npm dependency (uses the built-in `fetch`); Twilio remains available.
+- Full provider setup guides live in `V2/MOCK-SMS-SETUP.md`, `V2/TWILIO-SMS-SETUP.md`, and
+  `V2/TEXTBEE-SMS-SETUP.md`.
+
+---
+
+## DEBUGGING - 2026-11-24
+
+### Scope
+Live verification of the textbee path after the Android app was installed and the gateway enabled.
+**No source code changed** — this entry records end-to-end evidence and an important operational
+caveat discovered during the real send.
+
+### Connection checks (no SMS sent)
+- `GET https://api.textbee.dev/api/v1/gateway/stats` → `200`.
+  `totalDeviceCount` went `0 → 1`; `totalApiKeyCount: 2`.
+- `GET .../gateway/devices` → `200`, one device:
+  `enabled: true`, `isDefault: true`, **OPPO CPH2237 / Android 13**, app `2.10.0`,
+  `heartbeatEnabled: true`, `lastHeartbeat: 2026-11-23T21:25:08Z` (~3 minutes old at check time),
+  `networkInfo.networkType: wifi`, `hasSendSmsPermission: true`, `hasReceiveSmsPermission: true`.
+  Note: `simInfo.sims: []` and `hasReadPhoneStatePermission: false` — the app cannot enumerate SIMs,
+  but sending uses the default subscription and worked.
+- App-level check: `GET /api/admin/messaging/status` →
+  `{ "provider": "textbee", "configured": true, "missing": [] }`.
+
+### Live SMS test (sent from the site)
+- `POST /api/admin/messaging/test` →
+  `{ "to": "+639982305607", "body": "LEARW textbee live test" }`
+  (number supplied by the user as a 10-digit PH number, self-send; `+63` prefix added to make it
+  E.164):
+  ```json
+  { "status": "SUCCESS", "providerMessageId": "6b04b0ae96bbd64a7061f910" }
+  ```
+- textbee stats before/after: `totalSentSMSCount` **0 → 1**. This confirms textbee actually
+  dispatched the batch through the registered phone, not merely that our API returned `OK`.
+- The user confirmed the message **arrived on the phone**.
+
+### Caveat discovered: carrier load / credit
+- Even though our API returned `SUCCESS` and textbee's counter incremented, the user reported that
+  the **textbee Android app subsequently showed "Failed to send"**, which they attributed to the SIM
+  having **no prepaid load/credit** left. Both observations are recorded as reported.
+- Therefore a `SUCCESS` from our API (and from textbee's `/send-sms` endpoint) means **accepted and
+  queued**, **not** guaranteed handset delivery. Final delivery additionally depends on the phone
+  being online, having signal, and the SIM having enough load. textbee reports that rejection
+  asynchronously in the app/dashboard; `provider.send()` cannot see it.
+- **Impact on LEARW:** `DeliveryStatus.SUCCESS` is written as soon as textbee accepts the batch, so
+  it must **not** be treated as proof of carrier delivery for textbee. (The same distinction applies
+  conceptually to Twilio's "accepted" state, though Twilio exposes delivery callbacks.)
+  A future improvement would be to poll textbee's delivery-status endpoint or add a webhook.
+
+### Documentation updated
+- `TEXTBEE-SMS-SETUP.md` — added the SIM-load caveat to the "SUCCESS means queued" note, the
+  free-tier reminders, and the troubleshooting table.
+
+### Verification
+- No source changes, so the checks from the previous entry still apply: typecheck PASS, lint PASS,
+  tests PASS (10 suites / 42 tests).
+- `git status` was clean before this log entry; `.env` (which holds the real API key) is gitignored
+  via `V2/.gitignore`, so the key was never committed.

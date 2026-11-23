@@ -22,13 +22,13 @@ GET {{baseUrl}}/api/auth/me
 Authorization: Bearer {{adminToken}}
 
 ### Messaging provider status (any admin)
-# Reports the active provider and whether Twilio credentials are complete (no secrets returned).
+# Reports the active provider and whether its credentials are complete (no secrets returned).
 GET {{baseUrl}}/api/admin/messaging/status
 Authorization: Bearer {{adminToken}}
 
 ### Send a test SMS (superadmin only)
-# With MESSAGING_PROVIDER=mock this is a free dry run. Set MESSAGING_PROVIDER=twilio in .env to
-# exercise the real Twilio API; on a trial account the destination must be verified in Twilio first.
+# With MESSAGING_PROVIDER=mock this is a free dry run. Set MESSAGING_PROVIDER=twilio or textbee in
+# .env to exercise a real provider; on a Twilio trial account the destination must be verified first.
 POST {{baseUrl}}/api/admin/messaging/test
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json

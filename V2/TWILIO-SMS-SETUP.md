@@ -8,6 +8,8 @@ Use this once you have a **Twilio account**. It covers the `.env` values, how to
 - **Real messages sent:** only if you run the final "send" step. The connectivity check sends
   **nothing**.
 - Looking to test the SMS path for free first? See [`MOCK-SMS-SETUP.md`](./MOCK-SMS-SETUP.md).
+- **Twilio signup blocked in your region?** See [`TEXTBEE-SMS-SETUP.md`](./TEXTBEE-SMS-SETUP.md) for
+  an Android-phone SMS gateway that avoids Twilio entirely.
 
 ---
 
@@ -207,7 +209,7 @@ to the free, simulated provider described in [`MOCK-SMS-SETUP.md`](./MOCK-SMS-SE
 
 | Symptom | Cause / fix |
 | --- | --- |
-| Server won't start, `MESSAGING_PROVIDER must be "mock" or "twilio"` | Typo in the value. Use exactly `mock` or `twilio`. |
+| Server won't start, `MESSAGING_PROVIDER must be "mock", "twilio" or "textbee"` | Typo in the value. Use exactly `mock`, `twilio`, or `textbee`. |
 | `status` shows `provider: "mock"` after editing `.env` | Not restarted, or `.env` not saved. |
 | `500 MESSAGING_NOT_CONFIGURED` | One or more `TWILIO_*` values are empty; the error names them. |
 | Check B returns `401` | Wrong Account SID / Auth Token. Re-copy both from the Console. |

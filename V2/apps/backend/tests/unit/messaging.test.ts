@@ -3,6 +3,7 @@ import { app } from '../../src/app';
 import { signAccessToken } from '../../src/modules/auth/token';
 import { resetProviderForTests, setProviderForTests } from '../../src/modules/messaging';
 import { MockProvider } from '../../src/modules/messaging/mock.provider';
+import { TextbeeProvider, missingTextbeeConfig } from '../../src/modules/messaging/textbee.provider';
 import { TwilioProvider, missingTwilioConfig } from '../../src/modules/messaging/twilio.provider';
 
 function adminToken(role: string): string {
@@ -89,5 +90,63 @@ describe('TwilioProvider configuration', () => {
 
   it('fails fast with a clear error when credentials are absent', () => {
     expect(() => new TwilioProvider()).toThrow(/MESSAGING_PROVIDER=twilio requires/);
+  });
+});
+
+describe('TextbeeProvider', () => {
+  const config = { TEXTBEE_API_KEY: 'tb-key', TEXTBEE_DEVICE_ID: '', TEXTBEE_BASE_URL: '' };
+
+  it('reports the missing API key', () => {
+    expect(missingTextbeeConfig({ TEXTBEE_API_KEY: '' })).toEqual(['TEXTBEE_API_KEY']);
+  });
+
+  it('fails fast with a clear error when the API key is absent', () => {
+    expect(() => new TextbeeProvider()).toThrow(/MESSAGING_PROVIDER=textbee requires/);
+  });
+
+  it('sends through the textbee API and returns the batch id', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      text: async () => JSON.stringify({ data: { success: true, smsBatchId: 'batch-1' } })
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await new TextbeeProvider(config).send('+639170000001', 'ping');
+
+    expect(result).toEqual({ status: 'SUCCESS', providerMessageId: 'batch-1' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.textbee.dev/api/v1/gateway/send-sms',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': 'tb-key' }
+      })
+    );
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body);
+    expect(body).toEqual({ message: 'ping', recipients: ['+639170000001'] });
+  });
+
+  it('surfaces the textbee error message and status code on failure', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      text: async () => JSON.stringify({ error: 'Invalid API key' })
+    }) as unknown as typeof fetch;
+
+    const result = await new TextbeeProvider(config).send('+639170000001', 'ping');
+
+    expect(result.status).toBe('FAILURE');
+    expect(result.error).toContain('Invalid API key');
+    expect(result.error).toContain('401');
+  });
+
+  it('reports a network error as a failure instead of throwing', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
+
+    const result = await new TextbeeProvider(config).send('+639170000001', 'ping');
+
+    expect(result).toEqual({ status: 'FAILURE', error: 'network down' });
   });
 });

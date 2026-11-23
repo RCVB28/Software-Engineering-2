@@ -7,8 +7,9 @@ result → delivery records — **without a Twilio account and without sending a
 - **Cost:** nothing.
 - **Real messages sent:** none.
 - **What it proves:** the website can build and hand off an SMS, and record the outcome.
-- **What it does *not* prove:** that Twilio accepts your credentials. For that see
-  [`TWILIO-SMS-SETUP.md`](./TWILIO-SMS-SETUP.md).
+- **What it does *not* prove:** that a real provider (Twilio or textbee) accepts your credentials.
+  For those see [`TWILIO-SMS-SETUP.md`](./TWILIO-SMS-SETUP.md) or
+  [`TEXTBEE-SMS-SETUP.md`](./TEXTBEE-SMS-SETUP.md).
 
 ---
 
@@ -52,7 +53,7 @@ MESSAGING_MOCK_FAILURES=0
 
 | Key | Value | What it does |
 | --- | --- | --- |
-| `MESSAGING_PROVIDER` | `mock` | Selects the fake provider. Only `mock` or `twilio` are allowed — anything else stops the server with a clear error. |
+| `MESSAGING_PROVIDER` | `mock` | Selects the fake provider. Only `mock`, `twilio`, or `textbee` are allowed — anything else stops the server with a clear error. |
 | `MESSAGING_MOCK_FAILURES` | `0` | Number of *simulated* failures the mock returns before succeeding. `0` = every send succeeds. Set to e.g. `2` to watch the retry logic work. |
 | `MESSAGING_MAX_RETRIES` | `3` | How many attempts a broadcast makes per number before giving up. |
 | `MESSAGING_RETRY_DELAY_MS` | `200` | Delay between those attempts, in milliseconds. |
@@ -146,12 +147,13 @@ This is the closest to a genuine alert without sending anything:
 
 | ✅ Proves | ❌ Does not prove |
 | --- | --- |
-| The app builds a valid E.164 number and message | That Twilio credentials are valid |
+| The app builds a valid E.164 number and message | That Twilio/textbee credentials are valid |
 | The provider interface and dispatch run correctly | That a real phone receives an SMS |
-| Delivery records are written to Postgres | Any Twilio account/rate/trial rules |
+| Delivery records are written to Postgres | Any provider account/rate/trial rules |
 | Retries behave as configured | Real carrier delivery |
 
-When you are ready to test the real Twilio API, switch to [`TWILIO-SMS-SETUP.md`](./TWILIO-SMS-SETUP.md).
+When you are ready to test a real provider, switch to [`TWILIO-SMS-SETUP.md`](./TWILIO-SMS-SETUP.md)
+or [`TEXTBEE-SMS-SETUP.md`](./TEXTBEE-SMS-SETUP.md).
 
 ---
 
@@ -159,7 +161,7 @@ When you are ready to test the real Twilio API, switch to [`TWILIO-SMS-SETUP.md`
 
 | Symptom | Cause / fix |
 | --- | --- |
-| Server won't start, message about `MESSAGING_PROVIDER` | Value must be exactly `mock` or `twilio` (case-insensitive). Fix the typo. |
+| Server won't start, message about `MESSAGING_PROVIDER` | Value must be exactly `mock`, `twilio`, or `textbee` (case-insensitive). Fix the typo. |
 | `status` still shows an old provider | You did not restart after saving `.env`. Stop and run `npm run dev` again. |
 | `500 MESSAGING_NOT_CONFIGURED` | You set `MESSAGING_PROVIDER=twilio` but left `TWILIO_*` blank. Either fill them in or set the provider back to `mock`. |
 | `400` on the test send | `to` is not E.164. Use `+` then 8–15 digits, e.g. `+639171234567`. Spaces/dashes/parens are stripped automatically. |
